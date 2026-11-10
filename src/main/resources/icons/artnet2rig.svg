@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <!-- Material 2 Dark Theme Subtle Radial Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#252525"/>
+      <stop offset="100%" stop-color="#181818"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Squircle Base (Material Dark Surface) -->
+  <rect x="12" y="12" width="232" height="232" rx="54" fill="url(#bgGrad)" stroke="#2C2C2C" stroke-width="4"/>
+
+  <!-- Subtle Inner Ring -->
+  <rect x="16" y="16" width="224" height="224" rx="50" fill="none" stroke="#CFD8DC" stroke-width="1.5" stroke-opacity="0.2"/>
+
+  <!-- Lucide Icon: 3D Box (centered, scaled 6.8x) -->
+  <g transform="translate(46.4, 46.4) scale(6.8)" stroke="#CFD8DC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+    <path d="m3.3 7 8.7 5 8.7-5"/>
+    <path d="M12 22V12"/>
+  </g>
+</svg>

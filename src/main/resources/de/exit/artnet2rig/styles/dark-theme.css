@@ -1,0 +1,108 @@
+/* Material Design 2 Dark Theme - Studio Gray Edition */
+
+.root {
+    -fx-font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    -fx-font-size: 13px;
+    -fx-background-color: #121212;
+    -fx-text-fill: #E0E0E0;
+}
+
+/* Base Surfaces & Containers */
+.card-surface {
+    -fx-background-color: #1E1E1E;
+    -fx-background-radius: 4px;
+    -fx-border-color: #2C2C2C;
+    -fx-border-radius: 4px;
+    -fx-border-width: 1px;
+}
+
+.card-elevated {
+    -fx-background-color: #282828;
+    -fx-background-radius: 4px;
+    -fx-border-color: #333333;
+    -fx-border-radius: 4px;
+    -fx-border-width: 1px;
+}
+
+/* Buttons */
+.button {
+    -fx-background-color: #1E1E1E;
+    -fx-text-fill: #E0E0E0;
+    -fx-background-radius: 4px;
+    -fx-border-color: #2C2C2C;
+    -fx-border-radius: 4px;
+    -fx-border-width: 1px;
+    -fx-padding: 6px 12px;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #2A2A2A;
+    -fx-border-color: #CFD8DC;
+    -fx-text-fill: #FFFFFF;
+}
+
+.button:pressed {
+    -fx-background-color: #37474F;
+}
+
+.button-primary {
+    -fx-background-color: #CFD8DC;
+    -fx-text-fill: #121212;
+    -fx-font-weight: bold;
+    -fx-border-color: #CFD8DC;
+}
+
+.button-primary:hover {
+    -fx-background-color: #ECEFF1;
+    -fx-border-color: #ECEFF1;
+}
+
+/* Text & Labels */
+.label {
+    -fx-text-fill: #E0E0E0;
+}
+
+.label-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #CFD8DC;
+}
+
+.label-secondary {
+    -fx-font-size: 11px;
+    -fx-text-fill: #9E9E9E;
+}
+
+/* Text Fields & Inputs */
+.text-field {
+    -fx-background-color: #1F1F1F;
+    -fx-text-fill: #E0E0E0;
+    -fx-background-radius: 4px;
+    -fx-border-color: #2C2C2C;
+    -fx-border-radius: 4px;
+    -fx-border-width: 1px;
+    -fx-padding: 6px 8px;
+}
+
+.text-field:focused {
+    -fx-border-color: #CFD8DC;
+}
+
+/* Sliders */
+.slider .track {
+    -fx-background-color: #2C2C2C;
+    -fx-background-radius: 3px;
+    -fx-pref-height: 6px;
+}
+
+.slider .thumb {
+    -fx-background-color: #CFD8DC;
+    -fx-background-radius: 8px;
+    -fx-pref-width: 16px;
+    -fx-pref-height: 16px;
+}
+
+.slider .thumb:hover {
+    -fx-background-color: #ECEFF1;
+}
