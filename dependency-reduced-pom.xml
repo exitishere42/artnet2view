@@ -4,7 +4,7 @@
   <groupId>de.exit</groupId>
   <artifactId>artnet2view</artifactId>
   <name>artnet2view</name>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <description>Interactive 3D Lighting Rig &amp; Stage Visualizer for Art-Net with Java 21 LTS &amp; JavaFX 3D</description>
   <build>
     <plugins>

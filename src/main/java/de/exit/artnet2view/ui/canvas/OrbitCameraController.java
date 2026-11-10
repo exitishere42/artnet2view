@@ -5,18 +5,20 @@ import javafx.scene.PerspectiveCamera;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
+import javafx.scene.input.ZoomEvent;
 import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Translate;
 
 /**
- * High-precision 3D Orbit Camera Controller for the JavaFX 3D stage canvas.
- * Supports smooth mouse orbiting, panning, scroll zooming, and perspective presets.
+ * Touchpad-optimized 3D Orbit Camera Controller.
+ * Fully supports laptop touchpad gestures: 2-finger smooth scrolling, pinch-to-zoom,
+ * single-finger orbiting, and multi-modifier panning (Shift / Ctrl / Alt / Right Click).
  */
 public class OrbitCameraController {
 
     private final PerspectiveCamera camera;
 
-    // Transform hierarchy for the camera
+    // Transform chain: Pivot (Pan) -> Yaw (Y) -> Pitch (X) -> Distance (Zoom)
     private final Translate pivotTranslate = new Translate(0, 0, 0);
     private final Rotate rotateY = new Rotate(0, Rotate.Y_AXIS);
     private final Rotate rotateX = new Rotate(-25, Rotate.X_AXIS);
@@ -25,7 +27,9 @@ public class OrbitCameraController {
     private double mouseAnchorX;
     private double mouseAnchorY;
 
-    // Default reset parameters
+    // Touchpad Pan Mode Toggle
+    private boolean forcePanMode = false;
+
     private static final double DEFAULT_DISTANCE = 15.0;
     private static final double DEFAULT_PITCH = -25.0;
     private static final double DEFAULT_YAW = 0.0;
@@ -36,19 +40,17 @@ public class OrbitCameraController {
         this.camera.setFarClip(1000.0);
         this.camera.setFieldOfView(45.0);
 
-        // Apply transform chain in order: Pivot -> Yaw (Y) -> Pitch (X) -> Distance (Z)
         this.camera.getTransforms().addAll(pivotTranslate, rotateY, rotateX, cameraDistance);
     }
 
     /**
-     * Attaches mouse event listeners to the given interactive canvas node (e.g., SubScene).
-     *
-     * @param target the node capturing input
+     * Attaches mouse, touchpad scroll, and pinch-to-zoom gesture handlers to the canvas.
      */
     public void attachListeners(Node target) {
         target.setOnMousePressed(this::handleMousePressed);
         target.setOnMouseDragged(this::handleMouseDragged);
         target.setOnScroll(this::handleScroll);
+        target.setOnZoom(this::handleZoom);
     }
 
     private void handleMousePressed(MouseEvent e) {
@@ -62,40 +64,74 @@ public class OrbitCameraController {
         mouseAnchorX = e.getSceneX();
         mouseAnchorY = e.getSceneY();
 
-        if (e.getButton() == MouseButton.PRIMARY || e.getButton() == MouseButton.SECONDARY) {
-            if (e.isShiftDown() || e.getButton() == MouseButton.MIDDLE) {
-                // Pan
-                double panSpeed = 0.02 * (Math.abs(cameraDistance.getZ()) / 15.0);
-                pivotTranslate.setX(pivotTranslate.getX() - deltaX * panSpeed);
-                pivotTranslate.setY(pivotTranslate.getY() - deltaY * panSpeed);
-            } else {
-                // Orbit
-                double orbitSpeed = 0.3;
-                rotateY.setAngle(rotateY.getAngle() + deltaX * orbitSpeed);
-                double newPitch = rotateX.getAngle() - deltaY * orbitSpeed;
-                // Clamp pitch between -89 and 89 degrees to avoid gimbal lock flip
-                if (newPitch > -89.0 && newPitch < 89.0) {
-                    rotateX.setAngle(newPitch);
-                }
+        boolean isPan = forcePanMode ||
+                e.getButton() == MouseButton.SECONDARY ||
+                e.getButton() == MouseButton.MIDDLE ||
+                e.isShiftDown() ||
+                e.isControlDown() ||
+                e.isAltDown();
+
+        if (isPan) {
+            // Touchpad Pan: smooth translation proportional to camera distance
+            double currentDist = Math.abs(cameraDistance.getZ());
+            double panSpeed = 0.015 * (currentDist / 15.0);
+            pivotTranslate.setX(pivotTranslate.getX() - (deltaX * panSpeed));
+            pivotTranslate.setY(pivotTranslate.getY() - (deltaY * panSpeed));
+        } else {
+            // Touchpad Orbit: smooth rotation
+            double orbitSpeed = 0.35;
+            rotateY.setAngle(rotateY.getAngle() + deltaX * orbitSpeed);
+            double newPitch = rotateX.getAngle() - deltaY * orbitSpeed;
+            if (newPitch > -89.0 && newPitch < 89.0) {
+                rotateX.setAngle(newPitch);
             }
         }
     }
 
+    /**
+     * Damped, linear touchpad 2-finger scroll zoom preventing wild jumping.
+     */
     private void handleScroll(ScrollEvent e) {
-        double zoomFactor = 1.1;
-        double currentZ = cameraDistance.getZ();
-        if (e.getDeltaY() > 0) {
-            // Zoom in
-            cameraDistance.setZ(Math.min(-1.0, currentZ / zoomFactor));
-        } else {
-            // Zoom out
-            cameraDistance.setZ(Math.max(-200.0, currentZ * zoomFactor));
+        double delta = e.getDeltaY();
+        if (Math.abs(delta) > 0.001) {
+            double currentDist = Math.abs(cameraDistance.getZ());
+            double zoomFactor = 0.025 * (currentDist / 15.0);
+            double newZ = cameraDistance.getZ() + (delta * zoomFactor);
+            // Clamp distance between 1m and 150m
+            cameraDistance.setZ(Math.max(-150.0, Math.min(-1.0, newZ)));
         }
     }
 
     /**
-     * Resets camera back to default isometric 3D perspective view.
+     * Native touchpad Pinch-to-Zoom gesture.
      */
+    private void handleZoom(ZoomEvent e) {
+        double factor = e.getZoomFactor();
+        if (factor > 0.0) {
+            double newZ = cameraDistance.getZ() / factor;
+            cameraDistance.setZ(Math.max(-150.0, Math.min(-1.0, newZ)));
+        }
+        e.consume();
+    }
+
+    public void zoomIn() {
+        double current = cameraDistance.getZ();
+        cameraDistance.setZ(Math.min(-1.0, current * 0.85));
+    }
+
+    public void zoomOut() {
+        double current = cameraDistance.getZ();
+        cameraDistance.setZ(Math.max(-150.0, current * 1.15));
+    }
+
+    public boolean isForcePanMode() {
+        return forcePanMode;
+    }
+
+    public void setForcePanMode(boolean forcePanMode) {
+        this.forcePanMode = forcePanMode;
+    }
+
     public void resetView() {
         pivotTranslate.setX(0);
         pivotTranslate.setY(0);

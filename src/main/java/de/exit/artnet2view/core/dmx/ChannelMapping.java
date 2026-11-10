@@ -1,5 +1,7 @@
 package de.exit.artnet2view.core.dmx;
 
+import javafx.scene.paint.Color;
+
 /**
  * Utility functions for decoding DMX512 channel values into physical angles, normalized percentages, and strobe rates.
  */
@@ -67,8 +69,35 @@ public final class ChannelMapping {
         if (val < 16) {
             return 0.0;
         }
-        // Map 16..255 to 1.0Hz .. 20.0Hz
         double factor = (val - 16) / 239.0;
         return 1.0 + (factor * 19.0);
+    }
+
+    /**
+     * Decodes standard DMX color wheel indexed slots into vibrant RGB colors.
+     */
+    public static Color decodeColorWheel(int dmx) {
+        int val = dmx & 0xFF;
+        if (val < 16) {
+            return Color.WHITE;
+        } else if (val < 32) {
+            return Color.web("#FF1744"); // Vivid Red
+        } else if (val < 48) {
+            return Color.web("#00E676"); // Vivid Green
+        } else if (val < 64) {
+            return Color.web("#2979FF"); // Vivid Blue
+        } else if (val < 80) {
+            return Color.web("#FFEA00"); // Vivid Yellow
+        } else if (val < 96) {
+            return Color.web("#E040FB"); // Magenta / Pink
+        } else if (val < 112) {
+            return Color.web("#00E5FF"); // Cyan
+        } else if (val < 128) {
+            return Color.web("#FF9100"); // Orange
+        } else {
+            // 128..255: Continuous Rainbow rotation
+            double hue = ((val - 128) / 127.0) * 360.0;
+            return Color.hsb(hue, 1.0, 1.0);
+        }
     }
 }

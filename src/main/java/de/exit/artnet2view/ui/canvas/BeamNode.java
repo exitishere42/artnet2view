@@ -1,38 +1,38 @@
 package de.exit.artnet2view.ui.canvas;
 
 import javafx.scene.Group;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
+import javafx.scene.shape.CullFace;
 import javafx.scene.shape.MeshView;
 import javafx.scene.shape.TriangleMesh;
 
 /**
- * 3D Volumetric light cone rendering realistic stage haze and beam projection.
+ * 3D Volumetric light cone rendering realistic stage haze and beam projection with self-illumination.
  */
 public class BeamNode extends Group {
 
     private final MeshView coneMeshView;
     private final PhongMaterial material;
-    private final double lengthMeters;
-    private final double apexRadius;
-    private final double baseRadius;
+    private final WritableImage glowImage;
 
     private boolean strobePhase = true;
     private long lastStrobeToggleTime = 0;
 
     public BeamNode(double lengthMeters, double apexRadius, double baseRadius) {
-        this.lengthMeters = lengthMeters;
-        this.apexRadius = apexRadius;
-        this.baseRadius = baseRadius;
-
         this.material = new PhongMaterial();
-        this.material.setDiffuseColor(Color.color(1.0, 1.0, 1.0, 0.0));
-        this.material.setSpecularColor(Color.color(1.0, 1.0, 1.0, 0.2));
+        this.glowImage = new WritableImage(2, 2);
 
-        TriangleMesh mesh = createConeMesh(16, lengthMeters, apexRadius, baseRadius);
+        this.material.setDiffuseColor(Color.color(1.0, 1.0, 1.0, 0.0));
+        this.material.setSpecularColor(Color.WHITE);
+        this.material.setSelfIlluminationMap(glowImage);
+
+        TriangleMesh mesh = createConeMesh(20, lengthMeters, apexRadius, baseRadius);
         this.coneMeshView = new MeshView(mesh);
         this.coneMeshView.setMaterial(material);
-        this.coneMeshView.setCullFace(javafx.scene.shape.CullFace.NONE);
+        this.coneMeshView.setCullFace(CullFace.NONE);
 
         getChildren().add(coneMeshView);
     }
@@ -40,7 +40,6 @@ public class BeamNode extends Group {
     private TriangleMesh createConeMesh(int segments, double length, double r0, double r1) {
         TriangleMesh mesh = new TriangleMesh();
 
-        // Vertices: Top circle (0..segments-1), Bottom circle (segments..2*segments-1)
         float[] points = new float[segments * 2 * 3];
         float[] texCoords = new float[]{0, 0, 1, 0, 0, 1, 1, 1};
 
@@ -60,7 +59,6 @@ public class BeamNode extends Group {
             points[(segments + i) * 3 + 2] = sin * (float) r1;
         }
 
-        // Build side faces (quads made of 2 triangles per segment)
         int[] faces = new int[segments * 2 * 6];
         int faceIdx = 0;
         for (int i = 0; i < segments; i++) {
@@ -94,15 +92,7 @@ public class BeamNode extends Group {
     }
 
     /**
-     * Updates the volumetric beam appearance from normalized DMX parameters.
-     *
-     * @param dimmerNorm   normalized intensity (0.0 to 1.0)
-     * @param redNorm      red component (0.0 to 1.0)
-     * @param greenNorm    green component (0.0 to 1.0)
-     * @param blueNorm     blue component (0.0 to 1.0)
-     * @param whiteNorm    white component (0.0 to 1.0)
-     * @param strobeActive whether strobe is triggered
-     * @param strobeHz     strobe rate in Hertz
+     * Updates the volumetric beam appearance with self-illumination.
      */
     public void update(double dimmerNorm, double redNorm, double greenNorm, double blueNorm, double whiteNorm, boolean strobeActive, double strobeHz) {
         if (dimmerNorm <= 0.001) {
@@ -110,7 +100,6 @@ public class BeamNode extends Group {
             return;
         }
 
-        // Strobe timing logic
         if (strobeActive && strobeHz > 0) {
             long now = System.currentTimeMillis();
             long periodMs = (long) (1000.0 / strobeHz);
@@ -126,15 +115,29 @@ public class BeamNode extends Group {
 
         setVisible(true);
 
-        // Mix RGB with White
         double r = Math.min(1.0, redNorm + whiteNorm);
         double g = Math.min(1.0, greenNorm + whiteNorm);
         double b = Math.min(1.0, blueNorm + whiteNorm);
 
-        // Volumetric alpha: subtle translucent haze
-        double alpha = dimmerNorm * 0.40;
+        // Fallback to bright warm-white if all colors are zero but dimmer is active
+        if (r < 0.01 && g < 0.01 && b < 0.01) {
+            r = 1.0;
+            g = 0.95;
+            b = 0.90;
+        }
+
+        // Volumetric alpha: rich visible beam cone with strong self-illumination
+        double alpha = Math.min(1.0, dimmerNorm * 0.70);
         Color beamColor = Color.color(r, g, b, alpha);
+
         material.setDiffuseColor(beamColor);
-        material.setSpecularColor(Color.color(r, g, b, alpha * 0.5));
+
+        // Write directly into 2x2 Self-Illumination texture so the beam glows in the dark
+        PixelWriter pw = glowImage.getPixelWriter();
+        for (int px = 0; px < 2; px++) {
+            for (int py = 0; py < 2; py++) {
+                pw.setColor(px, py, beamColor);
+            }
+        }
     }
 }

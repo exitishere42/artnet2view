@@ -3,12 +3,18 @@ package de.exit.artnet2view.ui.canvas;
 import de.exit.artnet2view.core.artnet.DmxUniverseBuffer;
 import de.exit.artnet2view.core.model.Fixture;
 import de.exit.artnet2view.core.model.TrussElement;
+import de.exit.artnet2view.ui.theme.ThemeConstants;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.AmbientLight;
 import javafx.scene.Group;
 import javafx.scene.PerspectiveCamera;
 import javafx.scene.PointLight;
 import javafx.scene.SceneAntialiasing;
 import javafx.scene.SubScene;
+import javafx.scene.control.Button;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
@@ -21,7 +27,7 @@ import java.util.function.Consumer;
 
 /**
  * Responsive 3D Stage Visualizer Canvas container.
- * Hosts the JavaFX 3D {@link SubScene}, Orbit Camera, Stage Floor, and Lighting Rig elements.
+ * Hosts the JavaFX 3D {@link SubScene}, Orbit Camera, Stage Floor, Lighting Rig, and Touchpad Quick Controls.
  */
 public class Stage3DCanvas extends Pane {
 
@@ -55,8 +61,48 @@ public class Stage3DCanvas extends Pane {
         root3D.getChildren().addAll(trussGroup, fixtureGroup);
         getChildren().add(subScene);
 
+        // Touchpad Quick Control Floating Dock (Bottom Left)
+        HBox touchpadDock = createTouchpadDock();
+        getChildren().add(touchpadDock);
+
         subScene.widthProperty().bind(widthProperty());
         subScene.heightProperty().bind(heightProperty());
+
+        // Keep Touchpad Dock positioned at bottom left
+        layoutBoundsProperty().addListener((obs, oldB, newB) -> {
+            touchpadDock.setLayoutX(16);
+            touchpadDock.setLayoutY(newB.getHeight() - 48);
+        });
+    }
+
+    private HBox createTouchpadDock() {
+        HBox dock = new HBox(6);
+        dock.setAlignment(Pos.CENTER_LEFT);
+        dock.setPadding(new Insets(4, 8, 4, 8));
+        dock.setStyle("-fx-background-color: rgba(30, 30, 30, 0.75); -fx-background-radius: 4px; -fx-border-color: #333333; -fx-border-radius: 4px;");
+
+        Button zoomInBtn = new Button("+");
+        zoomInBtn.setPrefWidth(28);
+        zoomInBtn.setOnAction(e -> cameraController.zoomIn());
+
+        Button zoomOutBtn = new Button("-");
+        zoomOutBtn.setPrefWidth(28);
+        zoomOutBtn.setOnAction(e -> cameraController.zoomOut());
+
+        ToggleButton panToggle = new ToggleButton("Pan-Modus");
+        panToggle.setStyle("-fx-font-size: 11px;");
+        panToggle.setOnAction(e -> cameraController.setForcePanMode(panToggle.isSelected()));
+
+        Button resetBtn = new Button("Reset");
+        resetBtn.setStyle("-fx-font-size: 11px;");
+        resetBtn.setOnAction(e -> {
+            cameraController.resetView();
+            panToggle.setSelected(false);
+            cameraController.setForcePanMode(false);
+        });
+
+        dock.getChildren().addAll(zoomInBtn, zoomOutBtn, panToggle, resetBtn);
+        return dock;
     }
 
     private void setupLighting() {
@@ -106,19 +152,16 @@ public class Stage3DCanvas extends Pane {
     private void setupCoordinateAxes() {
         Group axes = new Group();
 
-        // X Axis = Red (Width)
         Cylinder axisX = new Cylinder(0.02, 1.0);
         axisX.setMaterial(new PhongMaterial(Color.web("#EF5350")));
         axisX.setRotate(90);
         axisX.setTranslateX(0.5);
         axisX.setTranslateY(-0.05);
 
-        // Y Axis = Green (Height / Up)
         Cylinder axisY = new Cylinder(0.02, 1.0);
         axisY.setMaterial(new PhongMaterial(Color.web("#66BB6A")));
         axisY.setTranslateY(-0.55);
 
-        // Z Axis = Blue (Depth)
         Cylinder axisZ = new Cylinder(0.02, 1.0);
         axisZ.setMaterial(new PhongMaterial(Color.web("#42A5F5")));
         axisZ.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);

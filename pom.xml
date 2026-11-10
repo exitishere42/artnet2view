@@ -7,7 +7,7 @@
 
     <groupId>de.exit</groupId>
     <artifactId>artnet2view</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <packaging>jar</packaging>
 
     <name>artnet2view</name>

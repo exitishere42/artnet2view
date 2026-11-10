@@ -1,5 +1,6 @@
 package de.exit.artnet2view.core.dmx;
 
+import javafx.scene.paint.Color;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -14,19 +15,15 @@ class ChannelMappingTest {
     @Test
     @DisplayName("Calculate 16-bit Pan angle (-270° to +270°)")
     void testPan16Bit() {
-        // Center position: coarse = 128, fine = 0 -> ~ 0 degrees
         double centerAngle = ChannelMapping.calculatePanAngle(128, 0, 540.0, false);
         assertThat(centerAngle).isCloseTo(0.0, offset(1.5));
 
-        // Minimum position: coarse = 0, fine = 0 -> -270 degrees
         double minAngle = ChannelMapping.calculatePanAngle(0, 0, 540.0, false);
         assertThat(minAngle).isCloseTo(-270.0, offset(0.01));
 
-        // Maximum position: coarse = 255, fine = 255 -> +270 degrees
         double maxAngle = ChannelMapping.calculatePanAngle(255, 255, 540.0, false);
         assertThat(maxAngle).isCloseTo(270.0, offset(0.01));
 
-        // Inverted: min becomes max
         double invertedMin = ChannelMapping.calculatePanAngle(0, 0, 540.0, true);
         assertThat(invertedMin).isCloseTo(270.0, offset(0.01));
     }
@@ -34,15 +31,12 @@ class ChannelMappingTest {
     @Test
     @DisplayName("Calculate 16-bit Tilt angle (-135° to +135°)")
     void testTilt16Bit() {
-        // Center: ~ 0 degrees
         double center = ChannelMapping.calculateTiltAngle(128, 0, 270.0, false);
         assertThat(center).isCloseTo(0.0, offset(1.5));
 
-        // Minimum: -135 degrees
         double min = ChannelMapping.calculateTiltAngle(0, 0, 270.0, false);
         assertThat(min).isCloseTo(-135.0, offset(0.01));
 
-        // Maximum: +135 degrees
         double max = ChannelMapping.calculateTiltAngle(255, 255, 270.0, false);
         assertThat(max).isCloseTo(135.0, offset(0.01));
     }
@@ -58,12 +52,28 @@ class ChannelMappingTest {
     @Test
     @DisplayName("Shutter Strobe detection")
     void testStrobeDetection() {
-        // 0-15: Shutter open (no strobe)
         assertThat(ChannelMapping.isStrobing(0)).isFalse();
         assertThat(ChannelMapping.isStrobing(15)).isFalse();
-
-        // 16-255: Active strobe
         assertThat(ChannelMapping.isStrobing(16)).isTrue();
         assertThat(ChannelMapping.isStrobing(255)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Decode Color Wheel to RGB Color")
+    void testColorWheelDecoding() {
+        // 0-15: Open White
+        Color openWhite = ChannelMapping.decodeColorWheel(0);
+        assertThat(openWhite.getRed()).isCloseTo(1.0, offset(0.01));
+        assertThat(openWhite.getGreen()).isCloseTo(1.0, offset(0.01));
+        assertThat(openWhite.getBlue()).isCloseTo(1.0, offset(0.01));
+
+        // Red wheel slot
+        Color red = ChannelMapping.decodeColorWheel(20);
+        assertThat(red.getRed()).isGreaterThan(0.8);
+        assertThat(red.getGreen()).isLessThan(0.3);
+
+        // Blue wheel slot
+        Color blue = ChannelMapping.decodeColorWheel(55);
+        assertThat(blue.getBlue()).isGreaterThan(0.8);
     }
 }

@@ -4,6 +4,8 @@ import de.exit.artnet2view.core.dmx.ChannelMapping;
 import de.exit.artnet2view.core.model.Fixture;
 import de.exit.artnet2view.core.model.FixtureType;
 import javafx.scene.Group;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Box;
@@ -25,6 +27,7 @@ public class Fixture3DNode extends Group {
     private final BeamNode beamNode;
     private final Cylinder lensNode;
     private final PhongMaterial lensMaterial;
+    private final WritableImage lensGlowImage;
 
     private final Cylinder selectionRing;
     private final PhongMaterial selectionMaterial;
@@ -47,10 +50,12 @@ public class Fixture3DNode extends Group {
 
         this.beamNode = new BeamNode(9.0, 0.08, 1.4);
         this.lensMaterial = new PhongMaterial(Color.BLACK);
+        this.lensGlowImage = new WritableImage(2, 2);
+        this.lensMaterial.setSelfIlluminationMap(lensGlowImage);
+
         this.lensNode = new Cylinder(0.08, 0.02);
         this.lensNode.setMaterial(lensMaterial);
 
-        // Selection ring at base
         this.selectionMaterial = new PhongMaterial(Color.web("#00E676"));
         this.selectionMaterial.setSpecularColor(Color.WHITE);
         this.selectionRing = new Cylinder(0.24, 0.015);
@@ -154,6 +159,7 @@ public class Fixture3DNode extends Group {
         }
 
         if (fixture.type() == FixtureType.MOVING_HEAD_SPOT) {
+            // Standard 16-channel spot layout with color wheel and RGB fallback
             int panCoarse = (start < universeData.length) ? (universeData[start] & 0xFF) : 128;
             int panFine = (start + 1 < universeData.length) ? (universeData[start + 1] & 0xFF) : 0;
             int tiltCoarse = (start + 2 < universeData.length) ? (universeData[start + 2] & 0xFF) : 128;
@@ -161,10 +167,40 @@ public class Fixture3DNode extends Group {
 
             int dimmer = (start + 5 < universeData.length) ? (universeData[start + 5] & 0xFF) : 0;
             int strobe = (start + 6 < universeData.length) ? (universeData[start + 6] & 0xFF) : 0;
-            int r = (start + 7 < universeData.length) ? (universeData[start + 7] & 0xFF) : 255;
-            int g = (start + 8 < universeData.length) ? (universeData[start + 8] & 0xFF) : 255;
-            int b = (start + 9 < universeData.length) ? (universeData[start + 9] & 0xFF) : 255;
+
+            // Check RGB channels (offsets 7, 8, 9)
+            int r = (start + 7 < universeData.length) ? (universeData[start + 7] & 0xFF) : 0;
+            int g = (start + 8 < universeData.length) ? (universeData[start + 8] & 0xFF) : 0;
+            int b = (start + 9 < universeData.length) ? (universeData[start + 9] & 0xFF) : 0;
             int w = (start + 10 < universeData.length) ? (universeData[start + 10] & 0xFF) : 0;
+
+            // Check Color Wheel (offset 4, e.g. channel 5 in 9ch/11ch spots, or offset 11)
+            int colorWheel = (start + 4 < universeData.length) ? (universeData[start + 4] & 0xFF) : 0;
+            if (colorWheel == 0 && start + 11 < universeData.length) {
+                colorWheel = universeData[start + 11] & 0xFF;
+            }
+
+            double rNorm;
+            double gNorm;
+            double bNorm;
+            double wNorm = ChannelMapping.toNormalized(w);
+
+            // If color wheel is used or RGB is inactive:
+            if (colorWheel > 0) {
+                Color wheelCol = ChannelMapping.decodeColorWheel(colorWheel);
+                rNorm = wheelCol.getRed();
+                gNorm = wheelCol.getGreen();
+                bNorm = wheelCol.getBlue();
+            } else if (r > 0 || g > 0 || b > 0 || w > 0) {
+                rNorm = ChannelMapping.toNormalized(r);
+                gNorm = ChannelMapping.toNormalized(g);
+                bNorm = ChannelMapping.toNormalized(b);
+            } else {
+                // If desk only sends Dimmer without explicit RGB, default to Warm White
+                rNorm = 1.0;
+                gNorm = 0.95;
+                bNorm = 0.90;
+            }
 
             double panDeg = ChannelMapping.calculatePanAngle(panCoarse, panFine, 540.0, fixture.panInvert());
             double tiltDeg = ChannelMapping.calculateTiltAngle(tiltCoarse, tiltFine, 270.0, fixture.tiltInvert());
@@ -173,48 +209,67 @@ public class Fixture3DNode extends Group {
             tiltRotate.setAngle(tiltDeg);
 
             double dimNorm = ChannelMapping.toNormalized(dimmer);
-            double rNorm = ChannelMapping.toNormalized(r);
-            double gNorm = ChannelMapping.toNormalized(g);
-            double bNorm = ChannelMapping.toNormalized(b);
-            double wNorm = ChannelMapping.toNormalized(w);
-
             boolean strobing = ChannelMapping.isStrobing(strobe);
             double strobeHz = ChannelMapping.calculateStrobeHz(strobe);
 
             beamNode.update(dimNorm, rNorm, gNorm, bNorm, wNorm, strobing, strobeHz);
-
-            if (dimNorm > 0.01) {
-                Color lensColor = Color.color(Math.min(1.0, rNorm + wNorm), Math.min(1.0, gNorm + wNorm), Math.min(1.0, bNorm + wNorm));
-                lensMaterial.setDiffuseColor(lensColor);
-                lensMaterial.setSpecularColor(Color.WHITE);
-            } else {
-                lensMaterial.setDiffuseColor(Color.BLACK);
-            }
+            updateLens(dimNorm, rNorm, gNorm, bNorm, wNorm);
 
         } else {
+            // Pars & Bars: Ch 1=Dimmer, Ch 2=Strobe, Ch 3=Red, Ch 4=Green, Ch 5=Blue, Ch 6=White
+            // Or Par-4ch: Ch 1=Red, Ch 2=Green, Ch 3=Blue, Ch 4=White
             int dimmer = (start < universeData.length) ? (universeData[start] & 0xFF) : 0;
             int strobe = (start + 1 < universeData.length) ? (universeData[start + 1] & 0xFF) : 0;
-            int r = (start + 2 < universeData.length) ? (universeData[start + 2] & 0xFF) : 255;
-            int g = (start + 3 < universeData.length) ? (universeData[start + 3] & 0xFF) : 255;
-            int b = (start + 4 < universeData.length) ? (universeData[start + 4] & 0xFF) : 255;
+            int r = (start + 2 < universeData.length) ? (universeData[start + 2] & 0xFF) : 0;
+            int g = (start + 3 < universeData.length) ? (universeData[start + 3] & 0xFF) : 0;
+            int b = (start + 4 < universeData.length) ? (universeData[start + 4] & 0xFF) : 0;
             int w = (start + 5 < universeData.length) ? (universeData[start + 5] & 0xFF) : 0;
 
-            double dimNorm = ChannelMapping.toNormalized(dimmer);
-            double rNorm = ChannelMapping.toNormalized(r);
-            double gNorm = ChannelMapping.toNormalized(g);
-            double bNorm = ChannelMapping.toNormalized(b);
+            double rNorm;
+            double gNorm;
+            double bNorm;
             double wNorm = ChannelMapping.toNormalized(w);
 
+            if (r > 0 || g > 0 || b > 0 || w > 0) {
+                rNorm = ChannelMapping.toNormalized(r);
+                gNorm = ChannelMapping.toNormalized(g);
+                bNorm = ChannelMapping.toNormalized(b);
+            } else {
+                rNorm = 1.0;
+                gNorm = 0.95;
+                bNorm = 0.90;
+            }
+
+            double dimNorm = ChannelMapping.toNormalized(dimmer);
             boolean strobing = ChannelMapping.isStrobing(strobe);
             double strobeHz = ChannelMapping.calculateStrobeHz(strobe);
 
             beamNode.update(dimNorm, rNorm, gNorm, bNorm, wNorm, strobing, strobeHz);
+            updateLens(dimNorm, rNorm, gNorm, bNorm, wNorm);
+        }
+    }
 
-            if (dimNorm > 0.01) {
-                Color lensColor = Color.color(Math.min(1.0, rNorm + wNorm), Math.min(1.0, gNorm + wNorm), Math.min(1.0, bNorm + wNorm));
-                lensMaterial.setDiffuseColor(lensColor);
-            } else {
-                lensMaterial.setDiffuseColor(Color.BLACK);
+    private void updateLens(double dimNorm, double rNorm, double gNorm, double bNorm, double wNorm) {
+        if (dimNorm > 0.01) {
+            Color lensColor = Color.color(
+                    Math.min(1.0, rNorm + wNorm),
+                    Math.min(1.0, gNorm + wNorm),
+                    Math.min(1.0, bNorm + wNorm)
+            );
+            lensMaterial.setDiffuseColor(lensColor);
+            PixelWriter pw = lensGlowImage.getPixelWriter();
+            for (int x = 0; x < 2; x++) {
+                for (int y = 0; y < 2; y++) {
+                    pw.setColor(x, y, lensColor);
+                }
+            }
+        } else {
+            lensMaterial.setDiffuseColor(Color.BLACK);
+            PixelWriter pw = lensGlowImage.getPixelWriter();
+            for (int x = 0; x < 2; x++) {
+                for (int y = 0; y < 2; y++) {
+                    pw.setColor(x, y, Color.BLACK);
+                }
             }
         }
     }
