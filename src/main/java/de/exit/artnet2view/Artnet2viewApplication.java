@@ -3,7 +3,11 @@ package de.exit.artnet2view;
 import de.exit.artnet2view.core.artnet.DmxUniverseBuffer;
 import de.exit.artnet2view.core.model.*;
 import de.exit.artnet2view.service.ArtNetService;
+import de.exit.artnet2view.service.DatabaseService;
+import de.exit.artnet2view.service.RigRepository;
+import de.exit.artnet2view.service.RigService;
 import de.exit.artnet2view.ui.canvas.Stage3DCanvas;
+import de.exit.artnet2view.ui.components.FixtureInspector;
 import de.exit.artnet2view.ui.theme.LucideIcon;
 import de.exit.artnet2view.ui.theme.ThemeConstants;
 import javafx.animation.AnimationTimer;
@@ -13,6 +17,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.image.Image;
 import javafx.scene.layout.BorderPane;
@@ -21,6 +26,7 @@ import javafx.scene.layout.Priority;
 import javafx.stage.Stage;
 
 import java.io.InputStream;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Main JavaFX Application lifecycle entry point for artnet2view.
@@ -29,15 +35,21 @@ public class Artnet2viewApplication extends Application {
 
     private Stage3DCanvas stage3DCanvas;
     private ArtNetService artNetService;
+    private DatabaseService databaseService;
+    private RigRepository rigRepository;
+    private RigService rigService;
+    private FixtureInspector inspector;
+
     private AnimationTimer renderLoop;
     private boolean demoModeActive = false;
     private double demoTick = 0.0;
+    private final AtomicLong nextEntityId = new AtomicLong(100);
 
     @Override
     public void start(Stage primaryStage) {
         primaryStage.setTitle("artnet2view - 3D Lighting Rig & Stage Visualizer");
-        primaryStage.setMinWidth(960);
-        primaryStage.setMinHeight(600);
+        primaryStage.setMinWidth(1100);
+        primaryStage.setMinHeight(650);
 
         try (InputStream iconStream = getClass().getResourceAsStream("/icons/artnet2view.png")) {
             if (iconStream != null) {
@@ -45,6 +57,12 @@ public class Artnet2viewApplication extends Application {
             }
         } catch (Exception ignored) {
         }
+
+        // Initialize Persistence Services
+        this.databaseService = new DatabaseService();
+        this.databaseService.initSchema();
+        this.rigRepository = new RigRepository(databaseService);
+        this.rigService = new RigService(rigRepository);
 
         // Start Core Art-Net UDP Service
         DmxUniverseBuffer buffer = new DmxUniverseBuffer();
@@ -54,12 +72,20 @@ public class Artnet2viewApplication extends Application {
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: " + ThemeConstants.BG_BASE + ";");
 
-        // 3D Visualizer Canvas in Center
+        // Center 3D Visualizer Canvas
         this.stage3DCanvas = new Stage3DCanvas();
         root.setCenter(stage3DCanvas);
 
+        // Right Inspector Dock
+        this.inspector = new FixtureInspector(rigService, this::reloadStageFromProject);
+        root.setRight(inspector);
+
+        // Wire 3D Selection with Service
+        stage3DCanvas.setSelectionListener(rigService::setSelectedFixture);
+        rigService.selectedFixtureProperty().addListener((obs, oldF, newF) -> stage3DCanvas.updateSelection(newF));
+
         // Load Default Stage Setup
-        loadDefaultStage();
+        initDefaultStage();
 
         // Top Header Bar
         HBox header = createHeader();
@@ -84,19 +110,21 @@ public class Artnet2viewApplication extends Application {
         primaryStage.setOnCloseRequest(e -> {
             renderLoop.stop();
             artNetService.stop();
+            databaseService.close();
         });
         primaryStage.show();
     }
 
-    private void loadDefaultStage() {
-        stage3DCanvas.clearStage();
+    private void initDefaultStage() {
+        RigProject project = rigService.getActiveProject();
+        project.clearAll();
 
         // 1. Overhead Truss (3x 2m = 6m width at Y=-3.5m)
-        stage3DCanvas.addTruss(new TrussElement(1L, TrussType.STRAIGHT_2M, new Transform3D(-2.0, -3.5, 0, 0, 0, 0)));
-        stage3DCanvas.addTruss(new TrussElement(2L, TrussType.STRAIGHT_2M, new Transform3D(0.0, -3.5, 0, 0, 0, 0)));
-        stage3DCanvas.addTruss(new TrussElement(3L, TrussType.STRAIGHT_2M, new Transform3D(2.0, -3.5, 0, 0, 0, 0)));
+        project.addTruss(new TrussElement(1L, TrussType.STRAIGHT_2M, new Transform3D(-2.0, -3.5, 0, 0, 0, 0)));
+        project.addTruss(new TrussElement(2L, TrussType.STRAIGHT_2M, new Transform3D(0.0, -3.5, 0, 0, 0, 0)));
+        project.addTruss(new TrussElement(3L, TrussType.STRAIGHT_2M, new Transform3D(2.0, -3.5, 0, 0, 0, 0)));
 
-        // 2. Hanging Moving Head Spots along the truss
+        // 2. Hanging Moving Head Spots
         double[] spotX = new double[]{-2.5, -0.8, 0.8, 2.5};
         for (int i = 0; i < spotX.length; i++) {
             Fixture spot = new Fixture(
@@ -111,11 +139,11 @@ public class Artnet2viewApplication extends Application {
                     false,
                     15.0
             );
-            stage3DCanvas.addFixture(spot);
+            project.addFixture(spot);
         }
 
         // 3. Floor LED Pars
-        Fixture parLeft = new Fixture(
+        project.addFixture(new Fixture(
                 20L,
                 "Par Left",
                 FixtureType.LED_PAR,
@@ -126,8 +154,8 @@ public class Artnet2viewApplication extends Application {
                 false,
                 false,
                 25.0
-        );
-        Fixture parRight = new Fixture(
+        ));
+        project.addFixture(new Fixture(
                 21L,
                 "Par Right",
                 FixtureType.LED_PAR,
@@ -138,13 +166,27 @@ public class Artnet2viewApplication extends Application {
                 false,
                 false,
                 25.0
-        );
-        stage3DCanvas.addFixture(parLeft);
-        stage3DCanvas.addFixture(parRight);
+        ));
+
+        reloadStageFromProject();
+    }
+
+    private void reloadStageFromProject() {
+        stage3DCanvas.clearStage();
+        RigProject project = rigService.getActiveProject();
+
+        for (TrussElement truss : project.getTrusses()) {
+            stage3DCanvas.addTruss(truss);
+        }
+        for (Fixture fix : project.getFixtures()) {
+            stage3DCanvas.addFixture(fix);
+        }
+
+        stage3DCanvas.updateSelection(rigService.getSelectedFixture());
     }
 
     private HBox createHeader() {
-        HBox header = new HBox(12);
+        HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(8, 16, 8, 16));
         header.setStyle("-fx-background-color: " + ThemeConstants.BG_CARD + "; -fx-border-color: " + ThemeConstants.BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
@@ -159,11 +201,11 @@ public class Artnet2viewApplication extends Application {
                 }}
         );
 
-        // Camera Perspective Presets
-        HBox presets = new HBox(6);
+        // View Presets
+        HBox presets = new HBox(4);
         presets.setAlignment(Pos.CENTER_LEFT);
 
-        Button btn3d = new Button("3D Orbit");
+        Button btn3d = new Button("3D");
         btn3d.setOnAction(e -> stage3DCanvas.getCameraController().resetView());
 
         Button btnTop = new Button("Top");
@@ -176,6 +218,68 @@ public class Artnet2viewApplication extends Application {
         btnSide.setOnAction(e -> stage3DCanvas.getCameraController().setSideView());
 
         presets.getChildren().addAll(btn3d, btnTop, btnFront, btnSide);
+
+        // Add Elements Buttons
+        HBox addTools = new HBox(6);
+        addTools.setAlignment(Pos.CENTER_LEFT);
+
+        Button addSpotBtn = new Button("+ Spot");
+        addSpotBtn.setOnAction(e -> {
+            long id = nextEntityId.incrementAndGet();
+            Fixture spot = new Fixture(
+                    id,
+                    "Spot " + id,
+                    FixtureType.MOVING_HEAD_SPOT,
+                    0,
+                    1,
+                    16,
+                    new Transform3D(0, -3.5, 0, 0, 0, 0),
+                    false,
+                    false,
+                    15.0
+            );
+            rigService.addFixture(spot);
+            reloadStageFromProject();
+        });
+
+        Button addParBtn = new Button("+ Par");
+        addParBtn.setOnAction(e -> {
+            long id = nextEntityId.incrementAndGet();
+            Fixture par = new Fixture(
+                    id,
+                    "Par " + id,
+                    FixtureType.LED_PAR,
+                    0,
+                    1,
+                    8,
+                    new Transform3D(0, -0.2, 0, 0, 0, 0),
+                    false,
+                    false,
+                    25.0
+            );
+            rigService.addFixture(par);
+            reloadStageFromProject();
+        });
+
+        Button addTrussBtn = new Button("+ Traverse");
+        addTrussBtn.setOnAction(e -> {
+            long id = nextEntityId.incrementAndGet();
+            TrussElement truss = new TrussElement(id, TrussType.STRAIGHT_2M, new Transform3D(0, -3.5, 0, 0, 0, 0));
+            rigService.addTruss(truss);
+            reloadStageFromProject();
+        });
+
+        addTools.getChildren().addAll(addSpotBtn, addParBtn, addTrussBtn);
+
+        // Persistence Buttons
+        HBox persistTools = new HBox(6);
+        persistTools.setAlignment(Pos.CENTER_LEFT);
+
+        Button saveBtn = new Button("Speichern");
+        saveBtn.setGraphic(LucideIcon.create(LucideIcon.SAVE, 14, "#CFD8DC"));
+        saveBtn.setOnAction(e -> rigService.saveActiveProject());
+
+        persistTools.getChildren().addAll(saveBtn);
 
         // Demo Mode Toggle Button
         ToggleButton demoBtn = new ToggleButton("Demo Mode");
@@ -204,7 +308,18 @@ public class Artnet2viewApplication extends Application {
         );
         telemetry.getChildren().addAll(statusDot, telemetryText);
 
-        header.getChildren().addAll(brand, presets, demoBtn, spacer, telemetry);
+        header.getChildren().addAll(
+                brand,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                presets,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                addTools,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                persistTools,
+                demoBtn,
+                spacer,
+                telemetry
+        );
         return header;
     }
 
@@ -212,7 +327,6 @@ public class Artnet2viewApplication extends Application {
         demoTick += 0.03;
         DmxUniverseBuffer buf = artNetService.getBuffer();
 
-        // 4 Moving Heads wave
         for (int i = 0; i < 4; i++) {
             int start = 1 + (i * 16);
             double panPhase = demoTick + (i * 0.8);
@@ -221,14 +335,10 @@ public class Artnet2viewApplication extends Application {
             int pan = (int) (128 + 90 * Math.sin(panPhase));
             int tilt = (int) (128 + 60 * Math.cos(tiltPhase));
 
-            // Pan Coarse & Tilt Coarse
             buf.setChannel(0, start, pan);
             buf.setChannel(0, start + 2, tilt);
-
-            // Dimmer
             buf.setChannel(0, start + 5, 255);
 
-            // RGB color cycling
             double colorPhase = demoTick + (i * 1.2);
             int r = (int) (127 + 127 * Math.sin(colorPhase));
             int g = (int) (127 + 127 * Math.sin(colorPhase + 2.0));
@@ -239,15 +349,14 @@ public class Artnet2viewApplication extends Application {
             buf.setChannel(0, start + 9, b);
         }
 
-        // 2 Pars pulsing amber/cyan
-        buf.setChannel(0, 65, 200); // Dimmer
-        buf.setChannel(0, 67, 255); // Red
-        buf.setChannel(0, 68, 150); // Green
-        buf.setChannel(0, 69, 50);  // Blue
+        buf.setChannel(0, 65, 200);
+        buf.setChannel(0, 67, 255);
+        buf.setChannel(0, 68, 150);
+        buf.setChannel(0, 69, 50);
 
-        buf.setChannel(0, 73, 200); // Dimmer
-        buf.setChannel(0, 75, 50);  // Red
-        buf.setChannel(0, 76, 220); // Green
-        buf.setChannel(0, 77, 255); // Blue
+        buf.setChannel(0, 73, 200);
+        buf.setChannel(0, 75, 50);
+        buf.setChannel(0, 76, 220);
+        buf.setChannel(0, 77, 255);
     }
 }

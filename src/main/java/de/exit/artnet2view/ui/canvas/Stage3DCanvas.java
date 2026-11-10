@@ -17,6 +17,7 @@ import javafx.scene.shape.Cylinder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Responsive 3D Stage Visualizer Canvas container.
@@ -31,6 +32,7 @@ public class Stage3DCanvas extends Pane {
     private final OrbitCameraController cameraController;
 
     private final List<Fixture3DNode> fixtureNodes = new ArrayList<>();
+    private Consumer<Fixture> selectionListener;
 
     public Stage3DCanvas() {
         this.root3D = new Group();
@@ -128,41 +130,44 @@ public class Stage3DCanvas extends Pane {
         root3D.getChildren().add(axes);
     }
 
-    /**
-     * Adds an F34 truss segment to the 3D scene.
-     */
+    public void setSelectionListener(Consumer<Fixture> selectionListener) {
+        this.selectionListener = selectionListener;
+    }
+
     public void addTruss(TrussElement truss) {
         Group trussNode = MeshFactory.createTrussNode(truss);
         trussGroup.getChildren().add(trussNode);
     }
 
-    /**
-     * Adds a lighting fixture to the 3D scene.
-     */
     public void addFixture(Fixture fixture) {
-        Fixture3DNode node = new Fixture3DNode(fixture);
+        Fixture3DNode node = new Fixture3DNode(fixture, f -> {
+            if (selectionListener != null) {
+                selectionListener.accept(f);
+            }
+        });
         fixtureNodes.add(node);
         fixtureGroup.getChildren().add(node);
     }
 
-    /**
-     * Clears all trusses and fixtures from the 3D scene.
-     */
+    public void updateSelection(Fixture selected) {
+        for (Fixture3DNode node : fixtureNodes) {
+            boolean isSelected = (selected != null && node.getFixture().id() != null &&
+                    node.getFixture().id().equals(selected.id()));
+            node.setSelected(isSelected);
+        }
+    }
+
     public void clearStage() {
         trussGroup.getChildren().clear();
         fixtureGroup.getChildren().clear();
         fixtureNodes.clear();
     }
 
-    /**
-     * Updates all 3D fixtures and volumetric beams from the current DMX universe buffer.
-     */
     public void renderDmxFrame(DmxUniverseBuffer buffer) {
         if (buffer == null) {
             return;
         }
 
-        // Cache universe copies per tick to avoid repeated lock acquisitions
         byte[][] universeCache = new byte[DmxUniverseBuffer.MAX_UNIVERSES][];
 
         for (Fixture3DNode node : fixtureNodes) {

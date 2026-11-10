@@ -10,11 +10,12 @@ import javafx.scene.shape.Box;
 import javafx.scene.shape.Cylinder;
 import javafx.scene.shape.Sphere;
 import javafx.scene.transform.Rotate;
-import javafx.scene.transform.Translate;
+
+import java.util.function.Consumer;
 
 /**
  * Interactive 3D scene-graph representation of a lighting fixture.
- * Supports independent Pan/Tilt rotations, lens emission, and volumetric beam cone.
+ * Supports independent Pan/Tilt rotations, lens emission, volumetric beam cone, and selection highlighting.
  */
 public class Fixture3DNode extends Group {
 
@@ -25,15 +26,16 @@ public class Fixture3DNode extends Group {
     private final Cylinder lensNode;
     private final PhongMaterial lensMaterial;
 
-    public Fixture3DNode(Fixture fixture) {
+    private final Cylinder selectionRing;
+    private final PhongMaterial selectionMaterial;
+
+    public Fixture3DNode(Fixture fixture, Consumer<Fixture> onSelect) {
         this.fixture = fixture;
 
-        // Position root at fixture coordinates
         setTranslateX(fixture.transform().x());
         setTranslateY(fixture.transform().y());
         setTranslateZ(fixture.transform().z());
 
-        // Base rotations
         getTransforms().addAll(
                 new Rotate(fixture.transform().yaw(), Rotate.Y_AXIS),
                 new Rotate(fixture.transform().pitch(), Rotate.X_AXIS),
@@ -48,30 +50,42 @@ public class Fixture3DNode extends Group {
         this.lensNode = new Cylinder(0.08, 0.02);
         this.lensNode.setMaterial(lensMaterial);
 
+        // Selection ring at base
+        this.selectionMaterial = new PhongMaterial(Color.web("#00E676"));
+        this.selectionMaterial.setSpecularColor(Color.WHITE);
+        this.selectionRing = new Cylinder(0.24, 0.015);
+        this.selectionRing.setMaterial(selectionMaterial);
+        this.selectionRing.setVisible(false);
+
         buildGeometry();
+
+        if (onSelect != null) {
+            setOnMouseClicked(e -> {
+                onSelect.accept(fixture);
+                e.consume();
+            });
+        }
     }
 
     private void buildGeometry() {
         PhongMaterial housingMat = new PhongMaterial(Color.web("#1E1E1E"));
         housingMat.setSpecularColor(Color.web("#424242"));
 
+        getChildren().add(selectionRing);
+
         if (fixture.type() == FixtureType.MOVING_HEAD_SPOT) {
-            // 1. Static Base
             Box base = new Box(0.32, 0.12, 0.32);
             base.setMaterial(housingMat);
             base.setTranslateY(0.06);
 
-            // 2. Rotating Yoke (Pan)
             Group yokeGroup = new Group();
             yokeGroup.setTranslateY(0.12);
             yokeGroup.getTransforms().add(panRotate);
 
-            // Yoke Crossbar
             Box yokeBottom = new Box(0.30, 0.06, 0.12);
             yokeBottom.setMaterial(housingMat);
             yokeBottom.setTranslateY(0.03);
 
-            // Yoke Left & Right Arms
             Box yokeLeft = new Box(0.06, 0.26, 0.10);
             yokeLeft.setMaterial(housingMat);
             yokeLeft.setTranslateX(-0.13);
@@ -84,12 +98,10 @@ public class Fixture3DNode extends Group {
 
             yokeGroup.getChildren().addAll(yokeBottom, yokeLeft, yokeRight);
 
-            // 3. Tilting Head (Tilt) inside Yoke
             Group headGroup = new Group();
             headGroup.setTranslateY(0.24);
             headGroup.getTransforms().add(tiltRotate);
 
-            // Head Body
             Sphere headBody = new Sphere(0.13);
             headBody.setMaterial(housingMat);
 
@@ -97,10 +109,7 @@ public class Fixture3DNode extends Group {
             snout.setMaterial(housingMat);
             snout.setTranslateY(0.10);
 
-            // Front Lens
             lensNode.setTranslateY(0.18);
-
-            // Volumetric Beam attached to Head tip pointing downwards along Y
             beamNode.setTranslateY(0.19);
 
             headGroup.getChildren().addAll(headBody, snout, lensNode, beamNode);
@@ -109,7 +118,6 @@ public class Fixture3DNode extends Group {
             getChildren().addAll(base, yokeGroup);
 
         } else if (fixture.type() == FixtureType.LED_PAR) {
-            // Static LED Par Can
             Cylinder can = new Cylinder(0.12, 0.24);
             can.setMaterial(housingMat);
             can.setTranslateY(0.12);
@@ -120,7 +128,6 @@ public class Fixture3DNode extends Group {
             getChildren().addAll(can, lensNode, beamNode);
 
         } else {
-            // LED Bar
             Box bar = new Box(1.0, 0.08, 0.08);
             bar.setMaterial(housingMat);
             bar.setTranslateY(0.04);
@@ -132,17 +139,16 @@ public class Fixture3DNode extends Group {
         }
     }
 
-    /**
-     * Decodes and applies incoming DMX universe channel data in real-time.
-     *
-     * @param universeData full 512-byte universe snapshot
-     */
+    public void setSelected(boolean selected) {
+        selectionRing.setVisible(selected);
+    }
+
     public void applyDmx(byte[] universeData) {
         if (universeData == null) {
             return;
         }
 
-        int start = fixture.startChannel() - 1; // 0-based
+        int start = fixture.startChannel() - 1;
         if (start < 0 || start >= universeData.length) {
             return;
         }
@@ -177,7 +183,6 @@ public class Fixture3DNode extends Group {
 
             beamNode.update(dimNorm, rNorm, gNorm, bNorm, wNorm, strobing, strobeHz);
 
-            // Update glowing lens color
             if (dimNorm > 0.01) {
                 Color lensColor = Color.color(Math.min(1.0, rNorm + wNorm), Math.min(1.0, gNorm + wNorm), Math.min(1.0, bNorm + wNorm));
                 lensMaterial.setDiffuseColor(lensColor);
@@ -187,7 +192,6 @@ public class Fixture3DNode extends Group {
             }
 
         } else {
-            // Pars & Bars: Channels 1=Dimmer, 2=Strobe, 3=Red, 4=Green, 5=Blue, 6=White
             int dimmer = (start < universeData.length) ? (universeData[start] & 0xFF) : 0;
             int strobe = (start + 1 < universeData.length) ? (universeData[start + 1] & 0xFF) : 0;
             int r = (start + 2 < universeData.length) ? (universeData[start + 2] & 0xFF) : 255;
