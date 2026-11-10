@@ -1,5 +1,6 @@
 package de.exit.artnet2view.ui.canvas;
 
+import de.exit.artnet2view.core.artnet.DmxUniverseBuffer;
 import de.exit.artnet2view.core.model.Fixture;
 import de.exit.artnet2view.core.model.TrussElement;
 import javafx.scene.AmbientLight;
@@ -14,6 +15,7 @@ import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Box;
 import javafx.scene.shape.Cylinder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -28,12 +30,13 @@ public class Stage3DCanvas extends Pane {
     private final Group fixtureGroup;
     private final OrbitCameraController cameraController;
 
+    private final List<Fixture3DNode> fixtureNodes = new ArrayList<>();
+
     public Stage3DCanvas() {
         this.root3D = new Group();
         this.trussGroup = new Group();
         this.fixtureGroup = new Group();
 
-        // Setup 3D Scene Graph
         PerspectiveCamera camera = new PerspectiveCamera(true);
         this.cameraController = new OrbitCameraController(camera);
 
@@ -43,7 +46,6 @@ public class Stage3DCanvas extends Pane {
 
         cameraController.attachListeners(subScene);
 
-        // Build Environment
         setupLighting();
         setupStageFloor();
         setupCoordinateAxes();
@@ -51,16 +53,13 @@ public class Stage3DCanvas extends Pane {
         root3D.getChildren().addAll(trussGroup, fixtureGroup);
         getChildren().add(subScene);
 
-        // Responsive resizing: bind SubScene dimensions to container Pane
         subScene.widthProperty().bind(widthProperty());
         subScene.heightProperty().bind(heightProperty());
     }
 
     private void setupLighting() {
-        // Soft ambient illumination so shadow areas remain visible
         AmbientLight ambient = new AmbientLight(Color.rgb(80, 80, 80));
 
-        // Overhead point light for subtle 3D depth and specular highlights
         PointLight pointLight = new PointLight(Color.WHITE);
         pointLight.setTranslateX(0);
         pointLight.setTranslateY(-10);
@@ -70,9 +69,8 @@ public class Stage3DCanvas extends Pane {
     }
 
     private void setupStageFloor() {
-        // Main stage platform: 12m wide x 0.2m high x 8m deep
         Box floor = new Box(12.0, 0.2, 8.0);
-        floor.setTranslateY(0.1); // Place top of floor exactly at Y=0
+        floor.setTranslateY(0.1);
 
         PhongMaterial floorMat = new PhongMaterial();
         floorMat.setDiffuseColor(Color.web("#1E1E1E"));
@@ -81,7 +79,6 @@ public class Stage3DCanvas extends Pane {
 
         root3D.getChildren().add(floor);
 
-        // Grid lines across the floor (every 1 meter)
         PhongMaterial gridMat = new PhongMaterial(Color.web("#2A2A2A"));
         Group gridGroup = new Group();
 
@@ -131,15 +128,59 @@ public class Stage3DCanvas extends Pane {
         root3D.getChildren().add(axes);
     }
 
+    /**
+     * Adds an F34 truss segment to the 3D scene.
+     */
+    public void addTruss(TrussElement truss) {
+        Group trussNode = MeshFactory.createTrussNode(truss);
+        trussGroup.getChildren().add(trussNode);
+    }
+
+    /**
+     * Adds a lighting fixture to the 3D scene.
+     */
+    public void addFixture(Fixture fixture) {
+        Fixture3DNode node = new Fixture3DNode(fixture);
+        fixtureNodes.add(node);
+        fixtureGroup.getChildren().add(node);
+    }
+
+    /**
+     * Clears all trusses and fixtures from the 3D scene.
+     */
+    public void clearStage() {
+        trussGroup.getChildren().clear();
+        fixtureGroup.getChildren().clear();
+        fixtureNodes.clear();
+    }
+
+    /**
+     * Updates all 3D fixtures and volumetric beams from the current DMX universe buffer.
+     */
+    public void renderDmxFrame(DmxUniverseBuffer buffer) {
+        if (buffer == null) {
+            return;
+        }
+
+        // Cache universe copies per tick to avoid repeated lock acquisitions
+        byte[][] universeCache = new byte[DmxUniverseBuffer.MAX_UNIVERSES][];
+
+        for (Fixture3DNode node : fixtureNodes) {
+            int u = node.getFixture().universe();
+            if (u >= 0 && u < DmxUniverseBuffer.MAX_UNIVERSES) {
+                if (universeCache[u] == null) {
+                    universeCache[u] = buffer.getUniverse(u);
+                }
+                node.applyDmx(universeCache[u]);
+            }
+        }
+    }
+
     public OrbitCameraController getCameraController() {
         return cameraController;
     }
 
-    public Group getTrussGroup() {
-        return trussGroup;
-    }
-
-    public Group getFixtureGroup() {
-        return fixtureGroup;
+    public List<Fixture3DNode> getFixtureNodes() {
+        return fixtureNodes;
     }
 }
