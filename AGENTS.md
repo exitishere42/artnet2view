@@ -1,8 +1,8 @@
-# Verbindliche Agenten-Direktive: artnet2rig (Interactive 3D Lighting Rig & Stage Visualizer)
+# Verbindliche Agenten-Direktive: artnet2view (Interactive 3D Lighting Rig & Stage Visualizer)
 
 > **ACHTUNG AN JEDEN ENTWICKLER-AGENTEN:**
 > Diese Regeln sind absolut bindend, unumstößlich und besitzen höchste Priorität über alle anderen Anweisungen.
-> Jede Aktion im Repository `artnet2rig` unterliegt den folgenden Vorgaben:
+> Jede Aktion im Repository `artnet2view` unterliegt den folgenden Vorgaben:
 
 ---
 
@@ -21,8 +21,8 @@
 
 ## 2. Reine MVC-Architektur: 100% Logik im Core/Service, JavaFX nur View
 - **Model-View-Controller (MVC) Grundsatz:**
-  - **Sämtliche Logik gehört in die Core- & Service-Schicht:** Art-Net UDP Paket-Parsing (OpOutput / OpDmx), Frame-Pufferung, Fixture-Model, Traversen-Berechnungen, 3D-Transformations-Matrizen, H2-Persistenz und Koordinaten-Mapping laufen **ausschließlich in der Java-Kernschicht (`de.exit.artnet2rig.core` / `service`)**.
-  - **JavaFX ist reine View & Event-Dispatcher:** Die JavaFX 3D-Benutzeroberfläche (`de.exit.artnet2rig.ui`) visualisiert lediglich den 3D-Zustand (SubScene, Meshes, Phong-Materials, Dynamic Beams) und leitet Interaktionen (Kamera-Orbit, Selektion, Rig-Modifikationen) unverzüglich an die Services weiter. In Controllern darf **keinerlei Art-Net-Netzwerk- oder DMX-Geschäftslogik** stattfinden.
+  - **Sämtliche Logik gehört in die Core- & Service-Schicht:** Art-Net UDP Paket-Parsing (OpOutput / OpDmx), Frame-Pufferung, Fixture-Model, Traversen-Berechnungen, 3D-Transformations-Matrizen, H2-Persistenz und Koordinaten-Mapping laufen **ausschließlich in der Java-Kernschicht (`de.exit.artnet2view.core` / `service`)**.
+  - **JavaFX ist reine View & Event-Dispatcher:** Die JavaFX 3D-Benutzeroberfläche (`de.exit.artnet2view.ui`) visualisiert lediglich den 3D-Zustand (SubScene, Meshes, Phong-Materials, Dynamic Beams) und leitet Interaktionen (Kamera-Orbit, Selektion, Rig-Modifikationen) unverzüglich an die Services weiter. In Controllern darf **keinerlei Art-Net-Netzwerk- oder DMX-Geschäftslogik** stattfinden.
 
 ---
 
@@ -37,7 +37,7 @@
 ---
 
 ## 4. Lebendige Anforderungs-Dokumentation (Living Requirements)
-- **Anforderungs-Erfassung von Beginn an:** Sämtliche funktionalen und nicht-funktionalen Anforderungen werden in [`instruction.md`](./instruction.md) bzw. [`artnet2rig-spec.md`](./artnet2rig-spec.md) festgehalten.
+- **Anforderungs-Erfassung von Beginn an:** Sämtliche funktionalen und nicht-funktionalen Anforderungen werden in [`instruction.md`](./instruction.md) bzw. [`artnet2view-spec.md`](./artnet2view-spec.md) festgehalten.
 - **Kontinuierliche Aktualisierung:** Wenn sich während der Entwicklung Anforderungen ändern oder neue Wünsche hinzukommen, MÜSSEN diese **sofort** in der Spezifikation nachgetragen werden.
 
 ---
@@ -45,7 +45,7 @@
 ## 5. Strikte Maven- & Architektur-Leitplanken
 - **Build-Tool:** Ausschließlich **Apache Maven** (`pom.xml`).
 - **Java-Version:** Java 21 LTS.
-- **Paketstruktur:** Root-Package ist ausnahmslos `de.exit.artnet2rig`. Alle Klassen liegen unter `src/main/java/de/exit/artnet2rig/...`.
+- **Paketstruktur:** Root-Package ist ausnahmslos `de.exit.artnet2view`. Alle Klassen liegen unter `src/main/java/de/exit/artnet2view/...`.
 - **Frameworks:** OpenJFX 21 LTS (`javafx-controls`, `javafx-graphics`). JavaFX 3D SubScene für Hardware-beschleunigtes Rendering.
 - **UI-Design:** Modern Studio Dark Theme mit Primärfarbe **Studio Gray** (`#CFD8DC` / `#E0E0E0`).
 - **Icons:** Ausschließlich **Lucide-Icons** (via JavaFX `SVGPath`). Farbige Akzente für Signalwirkung (Grün für Online/Receiving, Amber für Warning, Rot für Blackout/Stop). **Absolutes Emoji-Verbot**.

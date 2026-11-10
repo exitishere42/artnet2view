@@ -2,14 +2,14 @@
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 
-set "REPO=exitishere42/artnet2rig"
-set "INSTALL_DIR=%USERPROFILE%\artnet2rig"
-set "JAR_NAME=artnet2rig-1.0.0-all.jar"
+set "REPO=exitishere42/artnet2view"
+set "INSTALL_DIR=%USERPROFILE%\artnet2view"
+set "JAR_NAME=artnet2view-1.0.0-all.jar"
 set "RELEASE_URL=https://github.com/%REPO%/releases/latest/download"
 set "RAW_URL=https://raw.githubusercontent.com/%REPO%/main"
 
 echo ==================================================================
-echo   artnet2rig - Windows Installer
+echo   artnet2view - Windows Installer
 echo   Zielordner: %INSTALL_DIR%
 echo ==================================================================
 
@@ -40,22 +40,22 @@ echo [*] Lade Programmdateien herunter...
 powershell -NoProfile -Command ^
     "$ProgressPreference = 'SilentlyContinue'; " ^
     "Invoke-WebRequest -Uri '%RELEASE_URL%/%JAR_NAME%' -OutFile '%INSTALL_DIR%\%JAR_NAME%'; " ^
-    "Invoke-WebRequest -Uri '%RAW_URL%/artnet2rig.ico' -OutFile '%INSTALL_DIR%\artnet2rig.ico'; " ^
+    "Invoke-WebRequest -Uri '%RAW_URL%/artnet2view.ico' -OutFile '%INSTALL_DIR%\artnet2view.ico'; " ^
     "Invoke-WebRequest -Uri '%RAW_URL%/uninstall.bat' -OutFile '%INSTALL_DIR%\uninstall.bat'"
 
 (
     echo @echo off
     echo cd /d "%INSTALL_DIR%"
     echo start javaw -jar "%INSTALL_DIR%\%JAR_NAME%" %%*
-) > "%INSTALL_DIR%\artnet2rig.bat"
+) > "%INSTALL_DIR%\artnet2view.bat"
 
 powershell -NoProfile -Command ^
     "$ws = New-Object -ComObject WScript.Shell; " ^
-    "$s = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\artnet2rig.lnk'); " ^
-    "$s.TargetPath = '%INSTALL_DIR%\artnet2rig.bat'; " ^
+    "$s = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\artnet2view.lnk'); " ^
+    "$s.TargetPath = '%INSTALL_DIR%\artnet2view.bat'; " ^
     "$s.WorkingDirectory = '%INSTALL_DIR%'; " ^
-    "$s.IconLocation = '%INSTALL_DIR%\artnet2rig.ico,0'; " ^
-    "$s.Description = 'artnet2rig - 3D Lighting Rig & Stage Visualizer'; " ^
+    "$s.IconLocation = '%INSTALL_DIR%\artnet2view.ico,0'; " ^
+    "$s.Description = 'artnet2view - 3D Lighting Rig & Stage Visualizer'; " ^
     "$s.Save()"
 
 echo [OK] Installation erfolgreich abgeschlossen!

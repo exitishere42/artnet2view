@@ -1,4 +1,4 @@
-# Living Requirements Catalog: artnet2rig
+# Living Requirements Catalog: artnet2view
 
 ## Functional Requirements (FR)
 

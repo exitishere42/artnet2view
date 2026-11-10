@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=artnet2view
+Comment=artnet2view - Interactive 3D Lighting Rig & Stage Visualizer
+Exec=artnet2view
+Icon=artnet2view
+Categories=AudioVideo;Utility;
+Terminal=false
+StartupNotify=true
+StartupWMClass=de.exit.artnet2view.Artnet2viewApplication

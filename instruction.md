@@ -1,4 +1,4 @@
-# Projektanweisung: artnet2rig (Interactive 3D Lighting Rig & Stage Visualizer)
+# Projektanweisung: artnet2view (Interactive 3D Lighting Rig & Stage Visualizer)
 
 > **An den ausführenden Entwickler-Agenten:**
 > Dieses Dokument ist deine verbindliche Spezifikation und Leitplanke.
@@ -12,7 +12,7 @@
 ### Problem & Ziel
 In der professionellen und semiprofessionellen Lichttechnik fehlt ein schlanker, kostenloser und plattformunabhängiger 3D-Bühnen-Visualizer, der Art-Net-Streams empfängt und Traversen sowie Scheinwerfer mit echten 3D-Lichtstrahlen in Echtzeit visualisiert. Bestehende Programme sind extrem teuer, an proprietäre Pulte gekoppelt oder instabil.
 
-**`artnet2rig`** schließt diese Lücke als vollwertiger, leichtgewichtiger **3D Lighting Rig & Stage Visualizer mit interaktivem Rig-Editor**.
+**`artnet2view`** schließt diese Lücke als vollwertiger, leichtgewichtiger **3D Lighting Rig & Stage Visualizer mit interaktivem Rig-Editor**.
 
 ### In-Scope (MVP v1.0)
 1. **Art-Net 4 UDP Ingestion:**
@@ -36,7 +36,7 @@ In der professionellen und semiprofessionellen Lichttechnik fehlt ein schlanker,
    - Transparente Lichtkonen mit sanftem Falloff.
    - Echtzeit-Farbübernahme, Dimmer und Strobe-Flimmern.
 6. **Persistenz & Speicherung (H2 Datenbank & JSON):**
-   - Embedded H2-Datenbank mit HikariCP (`~/.artnet2rig/rigs.mv.db`) für Projekte, Fixture-Bibliotheken und Presets.
+   - Embedded H2-Datenbank mit HikariCP (`~/.artnet2view/rigs.mv.db`) für Projekte, Fixture-Bibliotheken und Presets.
    - Export/Import als saubere `.rig.json`-Projektdatei.
 7. **Modern Studio Dark UI (Gray Accent):**
    - Material Design 2 Dark Theme mit Akzentfarbe Studio Gray (`#CFD8DC` / `#E0E0E0`).
@@ -53,7 +53,7 @@ In der professionellen und semiprofessionellen Lichttechnik fehlt ein schlanker,
 
 - **Laufzeit & Sprache:** Java 21 LTS (OpenJDK 21).
 - **Build-Tool:** Apache Maven (`pom.xml`).
-- **GroupId / Package:** `de.exit.artnet2rig`.
+- **GroupId / Package:** `de.exit.artnet2view`.
 - **Frameworks:**
   - OpenJFX 21 LTS (`javafx-controls`, `javafx-graphics`, `javafx-base`).
   - H2 Database `2.3.232` mit HikariCP `6.2.0`.
@@ -67,9 +67,9 @@ In der professionellen und semiprofessionellen Lichttechnik fehlt ein schlanker,
 ## 3. Architektur & Modul-Struktur (Reine MVC-Trennung)
 
 ```text
-de.exit.artnet2rig
+de.exit.artnet2view
 ├── Main.java                          // JavaFX Launcher
-├── Artnet2rigApplication.java          // JavaFX Application Lifecycle
+├── Artnet2viewApplication.java          // JavaFX Application Lifecycle
 ├── core/                              // 100% reine Geschäftslogik (Kein JavaFX UI-Code!)
 │   ├── artnet/                        // Art-Net UDP Receiver & OpDmx Parser
 │   │   ├── ArtNetPacket.java
@@ -149,5 +149,5 @@ de.exit.artnet2rig
 
 ### Phase 7: Packaging & Cross-Platform-Deployment
 - `mvn test` zu 100% grün.
-- Fat-JAR Erstellung (`artnet2rig-1.0.0-all.jar`).
+- Fat-JAR Erstellung (`artnet2view-1.0.0-all.jar`).
 - `build-appimage.sh` für Linux, `.bat` / `.sh` Starter für Windows und Linux.

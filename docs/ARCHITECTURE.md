@@ -1,8 +1,8 @@
-# artnet2rig System Architecture
+# artnet2view System Architecture
 
 ## 1. High-Level Architecture Overview
 
-`artnet2rig` is structured according to strict Model-View-Controller (MVC) principles, isolating all DMX network ingestion and mathematics in the core layer, while keeping the JavaFX 3D rendering pipeline completely decoupled.
+`artnet2view` is structured according to strict Model-View-Controller (MVC) principles, isolating all DMX network ingestion and mathematics in the core layer, while keeping the JavaFX 3D rendering pipeline completely decoupled.
 
 ```text
 ┌────────────────────────────────────────────────────────┐
@@ -46,6 +46,6 @@
 
 ## 4. Persistence Architecture
 
-- **Embedded Database:** H2 Engine in file mode (`~/.artnet2rig/rigs.mv.db`).
+- **Embedded Database:** H2 Engine in file mode (`~/.artnet2view/rigs.mv.db`).
 - **Connection Pooling:** HikariCP with connection validation and optimized pool size.
 - **Interchange:** JSON serialization for project files (`*.rig.json`).
