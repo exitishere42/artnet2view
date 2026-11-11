@@ -1,4 +1,7 @@
 target/
+dependency-reduced-pom.xml
+*.jar
+*.AppImage
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -24,14 +27,14 @@ out/
 /nbbuild/
 /dist/
 /nbproject/load-from-server.xml
-/nbproject/private/
 
 ### VS Code ###
 .vscode/
 
-### OS & Scratch ###
-.DS_Store
-Thumbs.db
+### Data, Projects & Logs ###
+*.a2v
+data/
+logs/
 *.log
 *.tmp
 *.bak

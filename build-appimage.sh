@@ -55,5 +55,5 @@ if [ ! -f "$APPIMAGETOOL" ]; then
 fi
 
 OUTPUT_APPIMAGE="$PROJECT_DIR/artnet2view-x86_64.AppImage"
-ARCH=x86_64 "$APPIMAGETOOL" "$BUILD_DIR/AppDir" "$OUTPUT_APPIMAGE"
+ARCH=x86_64 "$APPIMAGETOOL" --appimage-extract-and-run "$BUILD_DIR/AppDir" "$OUTPUT_APPIMAGE"
 echo "[+] AppImage erfolgreich erstellt: $OUTPUT_APPIMAGE"

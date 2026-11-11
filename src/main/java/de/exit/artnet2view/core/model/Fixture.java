@@ -53,4 +53,8 @@ public record Fixture(
     public int endChannel() {
         return startChannel + channelCount - 1;
     }
+
+    public Fixture withTransform(Transform3D newTransform) {
+        return new Fixture(id, name, type, universe, startChannel, channelCount, newTransform, panInvert, tiltInvert, beamAngle);
+    }
 }

@@ -2,12 +2,14 @@ package de.exit.artnet2view;
 
 import de.exit.artnet2view.core.artnet.DmxUniverseBuffer;
 import de.exit.artnet2view.core.model.*;
+import de.exit.artnet2view.service.A2vProjectService;
 import de.exit.artnet2view.service.ArtNetService;
 import de.exit.artnet2view.service.DatabaseService;
 import de.exit.artnet2view.service.RigRepository;
 import de.exit.artnet2view.service.RigService;
 import de.exit.artnet2view.ui.canvas.Stage3DCanvas;
 import de.exit.artnet2view.ui.components.FixtureInspector;
+import de.exit.artnet2view.ui.menu.BrandActionMenu;
 import de.exit.artnet2view.ui.theme.LucideIcon;
 import de.exit.artnet2view.ui.theme.ThemeConstants;
 import javafx.animation.AnimationTimer;
@@ -15,58 +17,48 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.Separator;
-import javafx.scene.control.ToggleButton;
-import javafx.scene.image.Image;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
-import java.io.InputStream;
+import java.io.File;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Main JavaFX Application lifecycle entry point for artnet2view.
+ * Main application entry point for the ArtNet2View 3D Lighting Visualizer.
+ * Connects UDP Art-Net receiving, H2 local database, .a2v project file system,
+ * 3D SubScene canvas, and interactive fixture inspector.
  */
 public class Artnet2viewApplication extends Application {
 
-    private Stage3DCanvas stage3DCanvas;
-    private ArtNetService artNetService;
     private DatabaseService databaseService;
     private RigRepository rigRepository;
     private RigService rigService;
-    private FixtureInspector inspector;
+    private ArtNetService artNetService;
+    private A2vProjectService a2vProjectService;
 
+    private Stage3DCanvas stage3DCanvas;
+    private FixtureInspector inspector;
     private AnimationTimer renderLoop;
+    private Stage primaryStage;
+    private File currentA2vFile;
+
     private boolean demoModeActive = false;
-    private double demoTick = 0.0;
+    private double demoTick = 0;
     private final AtomicLong nextEntityId = new AtomicLong(100);
 
     @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("artnet2view - 3D Lighting Rig & Stage Visualizer");
-        primaryStage.setMinWidth(1100);
-        primaryStage.setMinHeight(650);
+        this.primaryStage = primaryStage;
+        primaryStage.setTitle("artnet2view - 3D Lighting Stage Visualizer");
 
-        try (InputStream iconStream = getClass().getResourceAsStream("/icons/artnet2view.png")) {
-            if (iconStream != null) {
-                primaryStage.getIcons().add(new Image(iconStream));
-            }
-        } catch (Exception ignored) {
-        }
-
-        // Initialize Persistence Services
+        // Initialize Services
         this.databaseService = new DatabaseService();
-        this.databaseService.initSchema();
         this.rigRepository = new RigRepository(databaseService);
         this.rigService = new RigService(rigRepository);
-
-        // Start Core Art-Net UDP Service
-        DmxUniverseBuffer buffer = new DmxUniverseBuffer();
-        this.artNetService = new ArtNetService(buffer, ArtNetService.DEFAULT_PORT);
+        this.a2vProjectService = new A2vProjectService();
+        this.artNetService = new ArtNetService(new DmxUniverseBuffer(), 6454);
         this.artNetService.start();
 
         BorderPane root = new BorderPane();
@@ -84,10 +76,16 @@ public class Artnet2viewApplication extends Application {
         stage3DCanvas.setSelectionListener(rigService::setSelectedFixture);
         rigService.selectedFixtureProperty().addListener((obs, oldF, newF) -> stage3DCanvas.updateSelection(newF));
 
+        // Wire 3D Gizmo Arrow translation directly to rigService & inspector
+        stage3DCanvas.setFixtureModifiedListener(modifiedFix -> {
+            rigService.updateFixture(modifiedFix, modifiedFix);
+            rigService.setSelectedFixture(modifiedFix);
+        });
+
         // Load Default Stage Setup
         initDefaultStage();
 
-        // Top Header Bar
+        // Top Header Bar with Brand Action Menu
         HBox header = createHeader();
         root.setTop(header);
 
@@ -124,20 +122,20 @@ public class Artnet2viewApplication extends Application {
         project.addTruss(new TrussElement(2L, TrussType.STRAIGHT_2M, new Transform3D(0.0, -3.5, 0, 0, 0, 0)));
         project.addTruss(new TrussElement(3L, TrussType.STRAIGHT_2M, new Transform3D(2.0, -3.5, 0, 0, 0, 0)));
 
-        // 2. Hanging Moving Head Spots
+        // 2. Hanging U'King ZQ02040 Moving Head Spots (11 Channels each)
         double[] spotX = new double[]{-2.5, -0.8, 0.8, 2.5};
         for (int i = 0; i < spotX.length; i++) {
             Fixture spot = new Fixture(
                     (long) (10 + i),
-                    "Spot " + (i + 1),
-                    FixtureType.MOVING_HEAD_SPOT,
+                    "ZQ02040 Spot " + (i + 1),
+                    FixtureType.MOVING_HEAD_ZQ02040,
                     0,
-                    1 + (i * 16),
-                    16,
+                    1 + (i * 11),
+                    11,
                     new Transform3D(spotX[i], -3.5, 0, 0, 0, 0),
                     false,
                     false,
-                    15.0
+                    6.0
             );
             project.addFixture(spot);
         }
@@ -148,7 +146,7 @@ public class Artnet2viewApplication extends Application {
                 "Par Left",
                 FixtureType.LED_PAR,
                 0,
-                65,
+                45,
                 8,
                 new Transform3D(-4.0, -0.2, -1.0, -45.0, 30.0, 0),
                 false,
@@ -160,7 +158,7 @@ public class Artnet2viewApplication extends Application {
                 "Par Right",
                 FixtureType.LED_PAR,
                 0,
-                73,
+                53,
                 8,
                 new Transform3D(4.0, -0.2, -1.0, -45.0, -30.0, 0),
                 false,
@@ -191,15 +189,36 @@ public class Artnet2viewApplication extends Application {
         header.setPadding(new Insets(8, 16, 8, 16));
         header.setStyle("-fx-background-color: " + ThemeConstants.BG_CARD + "; -fx-border-color: " + ThemeConstants.BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
 
-        // Brand & Title
-        HBox brand = new HBox(8);
-        brand.setAlignment(Pos.CENTER_LEFT);
-        brand.getChildren().addAll(
-                LucideIcon.create(LucideIcon.BOX, 20, ThemeConstants.PRIMARY_COLOR),
-                new Label("artnet2view") {{
-                    setStyle("-fx-font-weight: bold; -fx-font-size: 15px; -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + ";");
-                }}
-        );
+        // Brand & Title Button with Project Menu (matching JDMX)
+        Button brandBtn = new Button("artnet2view");
+        brandBtn.setGraphic(LucideIcon.create(LucideIcon.BOX, 20, ThemeConstants.PRIMARY_COLOR));
+        brandBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + "; -fx-font-weight: bold; -fx-font-size: 15px; -fx-cursor: hand; -fx-padding: 4px 8px;");
+
+        brandBtn.setOnMouseEntered(e -> brandBtn.setStyle("-fx-background-color: rgba(255, 255, 255, 0.08); -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + "; -fx-font-weight: bold; -fx-font-size: 15px; -fx-cursor: hand; -fx-padding: 4px 8px; -fx-background-radius: 4px;"));
+        brandBtn.setOnMouseExited(e -> brandBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + "; -fx-font-weight: bold; -fx-font-size: 15px; -fx-cursor: hand; -fx-padding: 4px 8px;"));
+
+        BrandActionMenu brandMenu = new BrandActionMenu();
+        brandBtn.setOnAction(e -> {
+            if (brandMenu.isShowing()) {
+                brandMenu.hide();
+            } else {
+                javafx.geometry.Point2D p = brandBtn.localToScreen(0, brandBtn.getHeight() + 4);
+                if (p != null) {
+                    brandMenu.show(brandBtn, p.getX(), p.getY());
+                }
+            }
+        });
+
+        brandMenu.setAction("new_project", this::handleNewProject);
+        brandMenu.setAction("open_file", this::handleOpenProject);
+        brandMenu.setAction("save", this::handleSaveProject);
+        brandMenu.setAction("save_as", this::handleSaveAsProject);
+        brandMenu.setAction("fullscreen", () -> {
+            if (primaryStage != null) {
+                primaryStage.setFullScreen(!primaryStage.isFullScreen());
+            }
+        });
+        brandMenu.setAction("about", this::handleAbout);
 
         // View Presets
         HBox presets = new HBox(4);
@@ -223,20 +242,20 @@ public class Artnet2viewApplication extends Application {
         HBox addTools = new HBox(6);
         addTools.setAlignment(Pos.CENTER_LEFT);
 
-        Button addSpotBtn = new Button("+ Spot");
+        Button addSpotBtn = new Button("+ ZQ02040");
         addSpotBtn.setOnAction(e -> {
             long id = nextEntityId.incrementAndGet();
             Fixture spot = new Fixture(
                     id,
-                    "Spot " + id,
-                    FixtureType.MOVING_HEAD_SPOT,
+                    "ZQ02040 " + id,
+                    FixtureType.MOVING_HEAD_ZQ02040,
                     0,
                     1,
-                    16,
+                    11,
                     new Transform3D(0, -3.5, 0, 0, 0, 0),
                     false,
                     false,
-                    15.0
+                    6.0
             );
             rigService.addFixture(spot);
             reloadStageFromProject();
@@ -264,22 +283,16 @@ public class Artnet2viewApplication extends Application {
         Button addTrussBtn = new Button("+ Traverse");
         addTrussBtn.setOnAction(e -> {
             long id = nextEntityId.incrementAndGet();
-            TrussElement truss = new TrussElement(id, TrussType.STRAIGHT_2M, new Transform3D(0, -3.5, 0, 0, 0, 0));
+            TrussElement truss = new TrussElement(
+                    id,
+                    TrussType.STRAIGHT_2M,
+                    new Transform3D(0, -3.5, 0, 0, 0, 0)
+            );
             rigService.addTruss(truss);
             reloadStageFromProject();
         });
 
         addTools.getChildren().addAll(addSpotBtn, addParBtn, addTrussBtn);
-
-        // Persistence Buttons
-        HBox persistTools = new HBox(6);
-        persistTools.setAlignment(Pos.CENTER_LEFT);
-
-        Button saveBtn = new Button("Speichern");
-        saveBtn.setGraphic(LucideIcon.create(LucideIcon.SAVE, 14, "#CFD8DC"));
-        saveBtn.setOnAction(e -> rigService.saveActiveProject());
-
-        persistTools.getChildren().addAll(saveBtn);
 
         // Demo Mode Toggle Button
         ToggleButton demoBtn = new ToggleButton("Demo Mode");
@@ -309,13 +322,12 @@ public class Artnet2viewApplication extends Application {
         telemetry.getChildren().addAll(statusDot, telemetryText);
 
         header.getChildren().addAll(
-                brand,
+                brandBtn,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 presets,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 addTools,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
-                persistTools,
                 demoBtn,
                 spacer,
                 telemetry
@@ -323,40 +335,122 @@ public class Artnet2viewApplication extends Application {
         return header;
     }
 
+    private void handleNewProject() {
+        initDefaultStage();
+        this.currentA2vFile = null;
+    }
+
+    private void handleOpenProject() {
+        FileChooser fc = new FileChooser();
+        fc.setTitle("Projekt öffnen (*.a2v)");
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(A2vProjectService.FILE_DESCRIPTION, "*" + A2vProjectService.FILE_EXTENSION));
+
+        File file = fc.showOpenDialog(primaryStage);
+        if (file != null) {
+            try {
+                RigProject loaded = a2vProjectService.loadFromFile(file);
+                rigService.setActiveProject(loaded);
+                this.currentA2vFile = file;
+                reloadStageFromProject();
+            } catch (Exception ex) {
+                showError("Fehler beim Öffnen", "Das Projekt konnte nicht geladen werden:\n" + ex.getMessage());
+            }
+        }
+    }
+
+    private void handleSaveProject() {
+        if (currentA2vFile == null) {
+            handleSaveAsProject();
+        } else {
+            try {
+                a2vProjectService.saveToFile(rigService.getActiveProject(), currentA2vFile);
+                rigService.saveActiveProject();
+            } catch (Exception ex) {
+                showError("Fehler beim Speichern", "Das Projekt konnte nicht gespeichert werden:\n" + ex.getMessage());
+            }
+        }
+    }
+
+    private void handleSaveAsProject() {
+        FileChooser fc = new FileChooser();
+        fc.setTitle("Projekt speichern unter... (*.a2v)");
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(A2vProjectService.FILE_DESCRIPTION, "*" + A2vProjectService.FILE_EXTENSION));
+        fc.setInitialFileName("meine_buehne.a2v");
+
+        File file = fc.showSaveDialog(primaryStage);
+        if (file != null) {
+            try {
+                a2vProjectService.saveToFile(rigService.getActiveProject(), file);
+                rigService.saveActiveProject();
+                this.currentA2vFile = file;
+            } catch (Exception ex) {
+                showError("Fehler beim Speichern", "Das Projekt konnte nicht gespeichert werden:\n" + ex.getMessage());
+            }
+        }
+    }
+
+    private void handleAbout() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Über artnet2view");
+        alert.setHeaderText("artnet2view v1.0.2");
+        alert.setContentText("Echtzeit 3D-Bühnen-Visualizer für Art-Net DMX512.\n" +
+                "• Unterstützt U'King ZQ02040 Moving Heads (11CH / 13CH)\n" +
+                "• Achsenbasierte 3D-Gizmo-Bewegung mit Pfeilen (X/Y/Z)\n" +
+                "• Native .a2v Projektdateien & Touchpad-Navigation\n\n" +
+                "https://github.com/exitishere42/artnet2view");
+        alert.showAndWait();
+    }
+
+    private void showError(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
     private void runDemoFrame() {
         demoTick += 0.03;
         DmxUniverseBuffer buf = artNetService.getBuffer();
 
+        // 4x U'King ZQ02040 Moving Heads (11 Channels: Pan, PanFine, Tilt, TiltFine, Speed, Dimmer, Strobe, R, G, B, W)
         for (int i = 0; i < 4; i++) {
-            int start = 1 + (i * 16);
+            int start = 1 + (i * 11);
             double panPhase = demoTick + (i * 0.8);
             double tiltPhase = demoTick * 1.5 + (i * 0.4);
 
             int pan = (int) (128 + 90 * Math.sin(panPhase));
             int tilt = (int) (128 + 60 * Math.cos(tiltPhase));
 
-            buf.setChannel(0, start, pan);
-            buf.setChannel(0, start + 2, tilt);
-            buf.setChannel(0, start + 5, 255);
+            buf.setChannel(0, start, pan);          // CH 1: Pan
+            buf.setChannel(0, start + 1, 0);        // CH 2: Pan Fine
+            buf.setChannel(0, start + 2, tilt);     // CH 3: Tilt
+            buf.setChannel(0, start + 3, 0);        // CH 4: Tilt Fine
+            buf.setChannel(0, start + 4, 0);        // CH 5: Speed
+            buf.setChannel(0, start + 5, 255);      // CH 6: Dimmer
+            buf.setChannel(0, start + 6, 0);        // CH 7: Strobe
 
             double colorPhase = demoTick + (i * 1.2);
             int r = (int) (127 + 127 * Math.sin(colorPhase));
             int g = (int) (127 + 127 * Math.sin(colorPhase + 2.0));
             int b = (int) (127 + 127 * Math.sin(colorPhase + 4.0));
 
-            buf.setChannel(0, start + 7, r);
-            buf.setChannel(0, start + 8, g);
-            buf.setChannel(0, start + 9, b);
+            buf.setChannel(0, start + 7, r);        // CH 8: Red
+            buf.setChannel(0, start + 8, g);        // CH 9: Green
+            buf.setChannel(0, start + 9, b);        // CH 10: Blue
+            buf.setChannel(0, start + 10, 0);       // CH 11: White
         }
 
-        buf.setChannel(0, 65, 200);
-        buf.setChannel(0, 67, 255);
-        buf.setChannel(0, 68, 150);
-        buf.setChannel(0, 69, 50);
+        // Par Left (CH 45)
+        buf.setChannel(0, 45, 200);
+        buf.setChannel(0, 47, 255);
+        buf.setChannel(0, 48, 150);
+        buf.setChannel(0, 49, 50);
 
-        buf.setChannel(0, 73, 200);
-        buf.setChannel(0, 75, 50);
-        buf.setChannel(0, 76, 220);
-        buf.setChannel(0, 77, 255);
+        // Par Right (CH 53)
+        buf.setChannel(0, 53, 200);
+        buf.setChannel(0, 55, 50);
+        buf.setChannel(0, 56, 220);
+        buf.setChannel(0, 57, 255);
     }
 }

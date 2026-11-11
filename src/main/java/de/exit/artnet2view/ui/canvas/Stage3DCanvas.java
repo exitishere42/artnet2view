@@ -39,6 +39,7 @@ public class Stage3DCanvas extends Pane {
 
     private final List<Fixture3DNode> fixtureNodes = new ArrayList<>();
     private Consumer<Fixture> selectionListener;
+    private Consumer<Fixture> fixtureModifiedListener;
 
     public Stage3DCanvas() {
         this.root3D = new Group();
@@ -106,14 +107,20 @@ public class Stage3DCanvas extends Pane {
     }
 
     private void setupLighting() {
-        AmbientLight ambient = new AmbientLight(Color.rgb(80, 80, 80));
+        // Dedicated bright ambient light scoped to all fixtures and beams
+        AmbientLight fixtureAmbient = new AmbientLight(Color.rgb(200, 200, 200));
+        fixtureAmbient.getScope().add(fixtureGroup);
 
-        PointLight pointLight = new PointLight(Color.WHITE);
+        // General stage ambient light for dark atmospheric background
+        AmbientLight stageAmbient = new AmbientLight(Color.rgb(90, 90, 90));
+
+        // Overhead point light for realistic specular highlights on trusses
+        PointLight pointLight = new PointLight(Color.rgb(180, 180, 180));
         pointLight.setTranslateX(0);
         pointLight.setTranslateY(-10);
         pointLight.setTranslateZ(-5);
 
-        root3D.getChildren().addAll(ambient, pointLight);
+        root3D.getChildren().addAll(fixtureAmbient, stageAmbient, pointLight);
     }
 
     private void setupStageFloor() {
@@ -177,17 +184,29 @@ public class Stage3DCanvas extends Pane {
         this.selectionListener = selectionListener;
     }
 
+    public void setFixtureModifiedListener(Consumer<Fixture> fixtureModifiedListener) {
+        this.fixtureModifiedListener = fixtureModifiedListener;
+    }
+
     public void addTruss(TrussElement truss) {
         Group trussNode = MeshFactory.createTrussNode(truss);
         trussGroup.getChildren().add(trussNode);
     }
 
     public void addFixture(Fixture fixture) {
-        Fixture3DNode node = new Fixture3DNode(fixture, f -> {
-            if (selectionListener != null) {
-                selectionListener.accept(f);
-            }
-        });
+        Fixture3DNode node = new Fixture3DNode(
+                fixture,
+                f -> {
+                    if (selectionListener != null) {
+                        selectionListener.accept(f);
+                    }
+                },
+                f -> {
+                    if (fixtureModifiedListener != null) {
+                        fixtureModifiedListener.accept(f);
+                    }
+                }
+        );
         fixtureNodes.add(node);
         fixtureGroup.getChildren().add(node);
     }

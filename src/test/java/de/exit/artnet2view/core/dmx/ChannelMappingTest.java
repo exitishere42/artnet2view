@@ -50,10 +50,11 @@ class ChannelMappingTest {
     }
 
     @Test
-    @DisplayName("Shutter Strobe detection")
+    @DisplayName("Shutter Strobe detection for ZQ02040 and standard moving heads")
     void testStrobeDetection() {
         assertThat(ChannelMapping.isStrobing(0)).isFalse();
-        assertThat(ChannelMapping.isStrobing(15)).isFalse();
+        assertThat(ChannelMapping.isStrobing(7)).isFalse();
+        assertThat(ChannelMapping.isStrobing(8)).isTrue();
         assertThat(ChannelMapping.isStrobing(16)).isTrue();
         assertThat(ChannelMapping.isStrobing(255)).isTrue();
     }
@@ -75,5 +76,23 @@ class ChannelMappingTest {
         // Blue wheel slot
         Color blue = ChannelMapping.decodeColorWheel(55);
         assertThat(blue.getBlue()).isGreaterThan(0.8);
+    }
+
+    @Test
+    @DisplayName("Verify U'King ZQ02040 11-Channel calculations")
+    void testZq02040ChannelCalculations() {
+        // Pan center
+        double pan = ChannelMapping.calculatePanAngle(128, 0, 540.0, false);
+        assertThat(pan).isCloseTo(0.0, offset(1.5));
+
+        // Tilt center
+        double tilt = ChannelMapping.calculateTiltAngle(128, 0, 270.0, false);
+        assertThat(tilt).isCloseTo(0.0, offset(1.5));
+
+        // Strobe threshold on ZQ02040 is >= 8
+        assertThat(ChannelMapping.isStrobing(7)).isFalse();
+        assertThat(ChannelMapping.isStrobing(8)).isTrue();
+        assertThat(ChannelMapping.calculateStrobeHz(8)).isCloseTo(1.0, offset(0.1));
+        assertThat(ChannelMapping.calculateStrobeHz(255)).isCloseTo(20.0, offset(0.1));
     }
 }

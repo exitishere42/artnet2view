@@ -36,6 +36,11 @@ public class RigService {
         return activeProjectProperty;
     }
 
+    public void setActiveProject(RigProject project) {
+        clearSelection();
+        activeProjectProperty.set(project != null ? project : new RigProject("Default Stage"));
+    }
+
     public void createNewProject(String name) {
         clearSelection();
         activeProjectProperty.set(new RigProject(name));

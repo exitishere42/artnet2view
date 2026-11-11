@@ -3,9 +3,8 @@ package de.exit.artnet2view.ui.canvas;
 import de.exit.artnet2view.core.dmx.ChannelMapping;
 import de.exit.artnet2view.core.model.Fixture;
 import de.exit.artnet2view.core.model.FixtureType;
+import de.exit.artnet2view.core.model.Transform3D;
 import javafx.scene.Group;
-import javafx.scene.image.PixelWriter;
-import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Box;
@@ -17,22 +16,27 @@ import java.util.function.Consumer;
 
 /**
  * Interactive 3D scene-graph representation of a lighting fixture.
- * Supports independent Pan/Tilt rotations, lens emission, volumetric beam cone, and selection highlighting.
+ * Supports independent Pan/Tilt rotations, lens emission, volumetric beam cone,
+ * selection highlighting, and 3D transformation gizmo arrows (X/Y/Z).
  */
 public class Fixture3DNode extends Group {
 
-    private final Fixture fixture;
+    private Fixture fixture;
     private final Rotate panRotate;
     private final Rotate tiltRotate;
     private final BeamNode beamNode;
     private final Cylinder lensNode;
     private final PhongMaterial lensMaterial;
-    private final WritableImage lensGlowImage;
 
     private final Cylinder selectionRing;
     private final PhongMaterial selectionMaterial;
+    private final TransformGizmo3D transformGizmo;
 
     public Fixture3DNode(Fixture fixture, Consumer<Fixture> onSelect) {
+        this(fixture, onSelect, null);
+    }
+
+    public Fixture3DNode(Fixture fixture, Consumer<Fixture> onSelect, Consumer<Fixture> onTransformUpdated) {
         this.fixture = fixture;
 
         setTranslateX(fixture.transform().x());
@@ -48,10 +52,9 @@ public class Fixture3DNode extends Group {
         this.panRotate = new Rotate(0, Rotate.Y_AXIS);
         this.tiltRotate = new Rotate(0, Rotate.X_AXIS);
 
-        this.beamNode = new BeamNode(9.0, 0.08, 1.4);
+        this.beamNode = new BeamNode(9.0, 0.06, 0.70);
         this.lensMaterial = new PhongMaterial(Color.BLACK);
-        this.lensGlowImage = new WritableImage(2, 2);
-        this.lensMaterial.setSelfIlluminationMap(lensGlowImage);
+        this.lensMaterial.setSpecularColor(Color.TRANSPARENT);
 
         this.lensNode = new Cylinder(0.08, 0.02);
         this.lensNode.setMaterial(lensMaterial);
@@ -62,11 +65,23 @@ public class Fixture3DNode extends Group {
         this.selectionRing.setMaterial(selectionMaterial);
         this.selectionRing.setVisible(false);
 
+        // 3D Axis Transformation Gizmo with Arrows (X=Red, Y=Green, Z=Blue)
+        this.transformGizmo = new TransformGizmo3D(newTransform -> {
+            this.fixture = this.fixture.withTransform(newTransform);
+            setTranslateX(newTransform.x());
+            setTranslateY(newTransform.y());
+            setTranslateZ(newTransform.z());
+            if (onTransformUpdated != null) {
+                onTransformUpdated.accept(this.fixture);
+            }
+        });
+        this.transformGizmo.setTransform(fixture.transform());
+
         buildGeometry();
 
         if (onSelect != null) {
             setOnMouseClicked(e -> {
-                onSelect.accept(fixture);
+                onSelect.accept(this.fixture);
                 e.consume();
             });
         }
@@ -76,9 +91,9 @@ public class Fixture3DNode extends Group {
         PhongMaterial housingMat = new PhongMaterial(Color.web("#1E1E1E"));
         housingMat.setSpecularColor(Color.web("#424242"));
 
-        getChildren().add(selectionRing);
+        getChildren().addAll(selectionRing, transformGizmo);
 
-        if (fixture.type() == FixtureType.MOVING_HEAD_SPOT) {
+        if (fixture.type().isMovingHead()) {
             Box base = new Box(0.32, 0.12, 0.32);
             base.setMaterial(housingMat);
             base.setTranslateY(0.06);
@@ -146,6 +161,18 @@ public class Fixture3DNode extends Group {
 
     public void setSelected(boolean selected) {
         selectionRing.setVisible(selected);
+        transformGizmo.setVisible(selected);
+        if (selected) {
+            transformGizmo.setTransform(fixture.transform());
+        }
+    }
+
+    public void updateTransform(Transform3D newTransform) {
+        this.fixture = this.fixture.withTransform(newTransform);
+        setTranslateX(newTransform.x());
+        setTranslateY(newTransform.y());
+        setTranslateZ(newTransform.z());
+        transformGizmo.setTransform(newTransform);
     }
 
     public void applyDmx(byte[] universeData) {
@@ -158,8 +185,19 @@ public class Fixture3DNode extends Group {
             return;
         }
 
-        if (fixture.type() == FixtureType.MOVING_HEAD_SPOT) {
-            // Standard 16-channel spot layout with color wheel and RGB fallback
+        if (fixture.type().isMovingHead()) {
+            // U'King ZQ02040 DMX Layout (11CH / 13CH):
+            // CH 1: Pan Coarse (0-540°)
+            // CH 2: Pan Fine (16-bit)
+            // CH 3: Tilt Coarse (0-270°)
+            // CH 4: Tilt Fine (16-bit)
+            // CH 5: Pan/Tilt Speed
+            // CH 6: Master Dimmer (0-255)
+            // CH 7: Strobe (0-7 open, 8-255 variable strobe)
+            // CH 8: Red (0-255)
+            // CH 9: Green (0-255)
+            // CH 10: Blue (0-255)
+            // CH 11: White (0-255)
             int panCoarse = (start < universeData.length) ? (universeData[start] & 0xFF) : 128;
             int panFine = (start + 1 < universeData.length) ? (universeData[start + 1] & 0xFF) : 0;
             int tiltCoarse = (start + 2 < universeData.length) ? (universeData[start + 2] & 0xFF) : 128;
@@ -168,35 +206,22 @@ public class Fixture3DNode extends Group {
             int dimmer = (start + 5 < universeData.length) ? (universeData[start + 5] & 0xFF) : 0;
             int strobe = (start + 6 < universeData.length) ? (universeData[start + 6] & 0xFF) : 0;
 
-            // Check RGB channels (offsets 7, 8, 9)
             int r = (start + 7 < universeData.length) ? (universeData[start + 7] & 0xFF) : 0;
             int g = (start + 8 < universeData.length) ? (universeData[start + 8] & 0xFF) : 0;
             int b = (start + 9 < universeData.length) ? (universeData[start + 9] & 0xFF) : 0;
             int w = (start + 10 < universeData.length) ? (universeData[start + 10] & 0xFF) : 0;
-
-            // Check Color Wheel (offset 4, e.g. channel 5 in 9ch/11ch spots, or offset 11)
-            int colorWheel = (start + 4 < universeData.length) ? (universeData[start + 4] & 0xFF) : 0;
-            if (colorWheel == 0 && start + 11 < universeData.length) {
-                colorWheel = universeData[start + 11] & 0xFF;
-            }
 
             double rNorm;
             double gNorm;
             double bNorm;
             double wNorm = ChannelMapping.toNormalized(w);
 
-            // If color wheel is used or RGB is inactive:
-            if (colorWheel > 0) {
-                Color wheelCol = ChannelMapping.decodeColorWheel(colorWheel);
-                rNorm = wheelCol.getRed();
-                gNorm = wheelCol.getGreen();
-                bNorm = wheelCol.getBlue();
-            } else if (r > 0 || g > 0 || b > 0 || w > 0) {
+            if (r > 0 || g > 0 || b > 0 || w > 0) {
                 rNorm = ChannelMapping.toNormalized(r);
                 gNorm = ChannelMapping.toNormalized(g);
                 bNorm = ChannelMapping.toNormalized(b);
             } else {
-                // If desk only sends Dimmer without explicit RGB, default to Warm White
+                // If desk only brings up Dimmer without explicit RGB, default to Warm White
                 rNorm = 1.0;
                 gNorm = 0.95;
                 bNorm = 0.90;
@@ -217,7 +242,6 @@ public class Fixture3DNode extends Group {
 
         } else {
             // Pars & Bars: Ch 1=Dimmer, Ch 2=Strobe, Ch 3=Red, Ch 4=Green, Ch 5=Blue, Ch 6=White
-            // Or Par-4ch: Ch 1=Red, Ch 2=Green, Ch 3=Blue, Ch 4=White
             int dimmer = (start < universeData.length) ? (universeData[start] & 0xFF) : 0;
             int strobe = (start + 1 < universeData.length) ? (universeData[start + 1] & 0xFF) : 0;
             int r = (start + 2 < universeData.length) ? (universeData[start + 2] & 0xFF) : 0;
@@ -252,25 +276,15 @@ public class Fixture3DNode extends Group {
     private void updateLens(double dimNorm, double rNorm, double gNorm, double bNorm, double wNorm) {
         if (dimNorm > 0.01) {
             Color lensColor = Color.color(
-                    Math.min(1.0, rNorm + wNorm),
-                    Math.min(1.0, gNorm + wNorm),
-                    Math.min(1.0, bNorm + wNorm)
+                    Math.min(1.0, rNorm + (wNorm * 0.95)),
+                    Math.min(1.0, gNorm + (wNorm * 0.95)),
+                    Math.min(1.0, bNorm + (wNorm * 0.85))
             );
             lensMaterial.setDiffuseColor(lensColor);
-            PixelWriter pw = lensGlowImage.getPixelWriter();
-            for (int x = 0; x < 2; x++) {
-                for (int y = 0; y < 2; y++) {
-                    pw.setColor(x, y, lensColor);
-                }
-            }
+            lensMaterial.setSpecularColor(Color.WHITE);
         } else {
-            lensMaterial.setDiffuseColor(Color.BLACK);
-            PixelWriter pw = lensGlowImage.getPixelWriter();
-            for (int x = 0; x < 2; x++) {
-                for (int y = 0; y < 2; y++) {
-                    pw.setColor(x, y, Color.BLACK);
-                }
-            }
+            lensMaterial.setDiffuseColor(Color.web("#1A1A1A"));
+            lensMaterial.setSpecularColor(Color.TRANSPARENT);
         }
     }
 

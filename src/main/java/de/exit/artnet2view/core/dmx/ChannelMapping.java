@@ -55,21 +55,21 @@ public final class ChannelMapping {
 
     /**
      * Determines whether the shutter/strobe channel value triggers strobing.
-     * Values 0-15 are typically shutter open or closed; 16-255 represent increasing strobe speed.
+     * On fixtures like U'King ZQ02040, values 0-7 are shutter open/closed; 8-255 trigger variable strobe.
      */
     public static boolean isStrobing(int strobeDmx) {
-        return (strobeDmx & 0xFF) >= 16;
+        return (strobeDmx & 0xFF) >= 8;
     }
 
     /**
-     * Calculates strobe frequency in Hertz (flashes per second) from DMX value (16 - 255).
+     * Calculates strobe frequency in Hertz (flashes per second) from DMX value (8 - 255).
      */
     public static double calculateStrobeHz(int strobeDmx) {
         int val = strobeDmx & 0xFF;
-        if (val < 16) {
+        if (val < 8) {
             return 0.0;
         }
-        double factor = (val - 16) / 239.0;
+        double factor = (val - 8) / 247.0;
         return 1.0 + (factor * 19.0);
     }
 
