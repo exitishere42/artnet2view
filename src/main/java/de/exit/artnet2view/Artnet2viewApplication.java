@@ -9,18 +9,25 @@ import de.exit.artnet2view.service.RigRepository;
 import de.exit.artnet2view.service.RigService;
 import de.exit.artnet2view.ui.canvas.Stage3DCanvas;
 import de.exit.artnet2view.ui.components.FixtureInspector;
+import de.exit.artnet2view.ui.dialog.AboutUpdateDialog;
 import de.exit.artnet2view.ui.menu.BrandActionMenu;
 import de.exit.artnet2view.ui.theme.LucideIcon;
 import de.exit.artnet2view.ui.theme.ThemeConstants;
 import javafx.animation.AnimationTimer;
+import javafx.animation.FadeTransition;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.File;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,6 +49,7 @@ public class Artnet2viewApplication extends Application {
     private FixtureInspector inspector;
     private AnimationTimer renderLoop;
     private Stage primaryStage;
+    private StackPane overlayPane;
     private File currentA2vFile;
 
     private boolean demoModeActive = false;
@@ -101,15 +109,29 @@ public class Artnet2viewApplication extends Application {
         };
         this.renderLoop.start();
 
-        Scene scene = new Scene(root, 1280, 800);
+        overlayPane = new StackPane();
+        overlayPane.setStyle("-fx-background-color: rgba(0, 0, 0, 0.65);");
+        overlayPane.setAlignment(Pos.CENTER);
+        overlayPane.setVisible(false);
+        overlayPane.setManaged(false);
+        overlayPane.setOnMouseClicked(e -> {
+            if (e.getTarget() == overlayPane) {
+                hideOverlay();
+            }
+        });
+
+        StackPane appRoot = new StackPane(root, overlayPane);
+        Scene scene = new Scene(appRoot, 1280, 800);
         scene.getStylesheets().add(getClass().getResource("/de/exit/artnet2view/styles/dark-theme.css").toExternalForm());
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ESCAPE && overlayPane.isVisible()) {
+                hideOverlay();
+                e.consume();
+            }
+        });
 
         primaryStage.setScene(scene);
-        primaryStage.setOnCloseRequest(e -> {
-            renderLoop.stop();
-            artNetService.stop();
-            databaseService.close();
-        });
+        primaryStage.setOnCloseRequest(e -> shutdown());
         primaryStage.show();
     }
 
@@ -189,13 +211,10 @@ public class Artnet2viewApplication extends Application {
         header.setPadding(new Insets(8, 16, 8, 16));
         header.setStyle("-fx-background-color: " + ThemeConstants.BG_CARD + "; -fx-border-color: " + ThemeConstants.BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
 
-        // Brand & Title Button with Project Menu (matching JDMX)
+        // Brand & Title Button with Dropdown Menu (matching JDMX)
         Button brandBtn = new Button("artnet2view");
-        brandBtn.setGraphic(LucideIcon.create(LucideIcon.BOX, 20, ThemeConstants.PRIMARY_COLOR));
-        brandBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + "; -fx-font-weight: bold; -fx-font-size: 15px; -fx-cursor: hand; -fx-padding: 4px 8px;");
-
-        brandBtn.setOnMouseEntered(e -> brandBtn.setStyle("-fx-background-color: rgba(255, 255, 255, 0.08); -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + "; -fx-font-weight: bold; -fx-font-size: 15px; -fx-cursor: hand; -fx-padding: 4px 8px; -fx-background-radius: 4px;"));
-        brandBtn.setOnMouseExited(e -> brandBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + "; -fx-font-weight: bold; -fx-font-size: 15px; -fx-cursor: hand; -fx-padding: 4px 8px;"));
+        brandBtn.setGraphic(LucideIcon.create(LucideIcon.BOX, 18, "#38BDF8"));
+        brandBtn.getStyleClass().add("brand-button");
 
         BrandActionMenu brandMenu = new BrandActionMenu();
         brandBtn.setOnAction(e -> {
@@ -209,16 +228,19 @@ public class Artnet2viewApplication extends Application {
             }
         });
 
-        brandMenu.setAction("new_project", this::handleNewProject);
-        brandMenu.setAction("open_file", this::handleOpenProject);
         brandMenu.setAction("save", this::handleSaveProject);
         brandMenu.setAction("save_as", this::handleSaveAsProject);
+        brandMenu.setAction("check_updates", () -> AboutUpdateDialog.show(this::showOverlay, this::hideOverlay));
         brandMenu.setAction("fullscreen", () -> {
             if (primaryStage != null) {
                 primaryStage.setFullScreen(!primaryStage.isFullScreen());
             }
         });
-        brandMenu.setAction("about", this::handleAbout);
+        brandMenu.setAction("exit", () -> {
+            shutdown();
+            Platform.exit();
+            System.exit(0);
+        });
 
         // View Presets
         HBox presets = new HBox(4);
@@ -335,26 +357,39 @@ public class Artnet2viewApplication extends Application {
         return header;
     }
 
-    private void handleNewProject() {
-        initDefaultStage();
-        this.currentA2vFile = null;
+    private void showOverlay(Node content) {
+        if (overlayPane == null || content == null) {
+            return;
+        }
+        overlayPane.getChildren().setAll(content);
+        overlayPane.setOpacity(0);
+        overlayPane.setManaged(true);
+        overlayPane.setVisible(true);
+
+        FadeTransition fade = new FadeTransition(Duration.millis(140), overlayPane);
+        fade.setFromValue(0);
+        fade.setToValue(1);
+        fade.play();
     }
 
-    private void handleOpenProject() {
-        FileChooser fc = new FileChooser();
-        fc.setTitle("Projekt öffnen (*.a2v)");
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(A2vProjectService.FILE_DESCRIPTION, "*" + A2vProjectService.FILE_EXTENSION));
+    private void hideOverlay() {
+        if (overlayPane == null) {
+            return;
+        }
+        overlayPane.setVisible(false);
+        overlayPane.setManaged(false);
+        overlayPane.getChildren().clear();
+    }
 
-        File file = fc.showOpenDialog(primaryStage);
-        if (file != null) {
-            try {
-                RigProject loaded = a2vProjectService.loadFromFile(file);
-                rigService.setActiveProject(loaded);
-                this.currentA2vFile = file;
-                reloadStageFromProject();
-            } catch (Exception ex) {
-                showError("Fehler beim Öffnen", "Das Projekt konnte nicht geladen werden:\n" + ex.getMessage());
-            }
+    private void shutdown() {
+        if (renderLoop != null) {
+            renderLoop.stop();
+        }
+        if (artNetService != null) {
+            artNetService.stop();
+        }
+        if (databaseService != null) {
+            databaseService.close();
         }
     }
 
@@ -387,18 +422,6 @@ public class Artnet2viewApplication extends Application {
                 showError("Fehler beim Speichern", "Das Projekt konnte nicht gespeichert werden:\n" + ex.getMessage());
             }
         }
-    }
-
-    private void handleAbout() {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Über artnet2view");
-        alert.setHeaderText("artnet2view v1.0.2");
-        alert.setContentText("Echtzeit 3D-Bühnen-Visualizer für Art-Net DMX512.\n" +
-                "• Unterstützt U'King ZQ02040 Moving Heads (11CH / 13CH)\n" +
-                "• Achsenbasierte 3D-Gizmo-Bewegung mit Pfeilen (X/Y/Z)\n" +
-                "• Native .a2v Projektdateien & Touchpad-Navigation\n\n" +
-                "https://github.com/exitishere42/artnet2view");
-        alert.showAndWait();
     }
 
     private void showError(String title, String message) {

@@ -27,6 +27,12 @@ public final class LucideIcon {
     public static final String SLIDERS = "M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6";
     public static final String MAXIMIZE = "M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3";
     public static final String INFO = "M12 16v-4m0-4h.01M22 12A10 10 0 1 1 2 12a10 10 0 0 1 20 0Z";
+    public static final String FILE_PEN = "M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v10 M14 2v4a2 2 0 0 0 2 2h4 M2 15.5V19h3.5L13 11.5l-3.5-3.5L2 15.5z";
+    public static final String ARROW_UP_CIRCLE = "M12 16V8 M8 12l4-4 4 4 M22 12A10 10 0 1 1 2 12a10 10 0 0 1 20 0z";
+    public static final String LOG_OUT = "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9";
+    public static final String X = "M18 6 6 18 M6 6l12 12";
+    public static final String EXTERNAL_LINK = "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14 21 3";
+    public static final String DOWNLOAD = "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3";
 
     /**
      * Creates an SVGPath node rendered in Lucide vector outline style.

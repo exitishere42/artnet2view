@@ -1,7 +1,6 @@
 package de.exit.artnet2view.ui.menu;
 
 import de.exit.artnet2view.ui.theme.LucideIcon;
-import de.exit.artnet2view.ui.theme.ThemeConstants;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.control.Button;
@@ -15,8 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Modern Action Dropdown Menu for the brand/logo button, matching JDMX.
- * Provides quick access to project management (.a2v), fullscreen, and app info.
+ * Brand Action Dropdown Menu styled identically to JDMX.
+ * Contains strictly Save, Save As, Updates, Fullscreen, and Exit actions.
  */
 public class BrandActionMenu extends Popup {
 
@@ -28,28 +27,33 @@ public class BrandActionMenu extends Popup {
         setHideOnEscape(true);
 
         VBox root = new VBox(2);
-        root.setStyle("-fx-background-color: #1E1E1E; -fx-background-radius: 4px; -fx-border-color: #333333; -fx-border-radius: 4px; -fx-padding: 4px; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.6), 10, 0, 0, 4);");
-        root.setMinWidth(195);
-        root.setPrefWidth(200);
+        root.getStyleClass().add("action-menu-popup");
+        var cssUrl = BrandActionMenu.class.getResource("/de/exit/artnet2view/styles/dark-theme.css");
+        if (cssUrl != null) {
+            root.getStylesheets().add(cssUrl.toExternalForm());
+        }
+        root.setMinWidth(175);
+        root.setPrefWidth(178);
 
-        // Project operations (.a2v)
-        Button btnNew = createMenuItem("new_project", "Neues Projekt", LucideIcon.PLUS, Color.web("#22C55E"));
-        Button btnOpen = createMenuItem("open_file", "Projekt öffnen...", LucideIcon.FOLDER, Color.web("#38BDF8"));
-        Button btnSave = createMenuItem("save", "Projekt speichern", LucideIcon.SAVE, Color.web("#A855F7"));
-        Button btnSaveAs = createMenuItem("save_as", "Speichern unter...", LucideIcon.SAVE, Color.web("#F59E0B"));
+        // 1. Project Saving (.a2v)
+        Button btnSave = createMenuItem("save", "Speichern", LucideIcon.SAVE, Color.web("#10B981"));
+        Button btnSaveAs = createMenuItem("save_as", "Speichern unter...", LucideIcon.FILE_PEN, Color.web("#2DD4BF"));
 
-        // View & App
-        Button btnFullscreen = createMenuItem("fullscreen", "Vollbild umschalten", LucideIcon.MAXIMIZE, Color.web("#F43F5E"));
-        Button btnAbout = createMenuItem("about", "Über artnet2view", LucideIcon.INFO, Color.web("#94A3B8"));
+        // 2. Updates & View
+        Button btnUpdates = createMenuItem("check_updates", "Updates", LucideIcon.ARROW_UP_CIRCLE, Color.web("#38BDF8"));
+        Button btnFullscreen = createMenuItem("fullscreen", "Vollbild", LucideIcon.MAXIMIZE, Color.web("#D1D5DB"));
+
+        // 3. Application Exit
+        Button btnExit = createMenuItem("exit", "Beenden", LucideIcon.LOG_OUT, Color.web("#EF4444"));
 
         root.getChildren().addAll(
-                btnNew,
-                btnOpen,
                 btnSave,
                 btnSaveAs,
-                createSeparator(),
+                createMenuSeparator(),
+                btnUpdates,
                 btnFullscreen,
-                btnAbout
+                createMenuSeparator(),
+                btnExit
         );
 
         getContent().add(root);
@@ -57,17 +61,14 @@ public class BrandActionMenu extends Popup {
 
     private Button createMenuItem(String key, String title, String iconName, Color iconColor) {
         Button btn = new Button(title);
+        btn.getStyleClass().add("action-menu-item");
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setAlignment(Pos.CENTER_LEFT);
         btn.setCursor(Cursor.HAND);
         btn.setContentDisplay(ContentDisplay.LEFT);
         btn.setGraphicTextGap(10);
-        btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #E0E0E0; -fx-font-size: 12px; -fx-padding: 6px 10px; -fx-background-radius: 3px;");
 
-        btn.setGraphic(LucideIcon.create(iconName, 15, toHex(iconColor)));
-
-        btn.setOnMouseEntered(e -> btn.setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: #FFFFFF; -fx-font-size: 12px; -fx-padding: 6px 10px; -fx-background-radius: 3px;"));
-        btn.setOnMouseExited(e -> btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #E0E0E0; -fx-font-size: 12px; -fx-padding: 6px 10px; -fx-background-radius: 3px;"));
+        btn.setGraphic(LucideIcon.create(iconName, 16, toHex(iconColor)));
 
         btn.setOnAction(e -> {
             hide();
@@ -81,9 +82,9 @@ public class BrandActionMenu extends Popup {
         return btn;
     }
 
-    private Separator createSeparator() {
+    private Separator createMenuSeparator() {
         Separator sep = new Separator();
-        sep.setStyle("-fx-background-color: #333333; -fx-padding: 2px 0 2px 0;");
+        sep.getStyleClass().add("action-menu-separator");
         return sep;
     }
 
@@ -100,5 +101,9 @@ public class BrandActionMenu extends Popup {
         } else {
             actions.remove(key);
         }
+    }
+
+    public Map<String, Button> getItems() {
+        return items;
     }
 }

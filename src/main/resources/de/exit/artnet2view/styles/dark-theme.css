@@ -106,3 +106,136 @@
 .slider .thumb:hover {
     -fx-background-color: #ECEFF1;
 }
+
+/* Brand Button (Logo + Title, borderless JDMX style) */
+.brand-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-text-fill: #D1D5DB;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-letter-spacing: 0.5px;
+    -fx-padding: 4px 10px 4px 6px;
+    -fx-background-radius: 4px;
+    -fx-cursor: hand;
+    -fx-alignment: CENTER_LEFT;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.brand-button:hover {
+    -fx-background-color: #242424;
+    -fx-border-color: transparent;
+    -fx-text-fill: #F3F4F6;
+}
+
+.brand-button:pressed {
+    -fx-background-color: #2E2E2E;
+}
+
+/* Brand Action Dropdown Menu (JDMX style) */
+.action-menu-popup {
+    -fx-background-color: #1E1E1E;
+    -fx-border-color: #2E2E2E;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+    -fx-padding: 5px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.6), 16, 0, 0, 8);
+}
+
+.action-menu-item {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-text-fill: #D1D5DB;
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-padding: 6px 10px;
+    -fx-background-radius: 6px;
+    -fx-cursor: hand;
+    -fx-alignment: CENTER_LEFT;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.action-menu-item:hover {
+    -fx-background-color: #2A2A2A;
+    -fx-border-color: transparent;
+    -fx-text-fill: #F3F4F6;
+}
+
+.action-menu-item:pressed {
+    -fx-background-color: #333333;
+}
+
+.action-menu-separator {
+    -fx-padding: 4px 6px;
+}
+
+.action-menu-separator .line {
+    -fx-border-color: #2E2E2E;
+    -fx-border-width: 0.5px;
+}
+
+/* In-App Modal Dialog & Update Window */
+.settings-dialog-card {
+    -fx-background-color: #1E1E1E;
+    -fx-border-color: #2E2E2E;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+    -fx-padding: 18px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.75), 24, 0, 0, 8);
+}
+
+.settings-dialog-header {
+    -fx-padding: 0 0 8px 0;
+    -fx-border-color: transparent transparent #2E2E2E transparent;
+    -fx-border-width: 0 0 1px 0;
+}
+
+.settings-dialog-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #F3F4F6;
+}
+
+.modal-close-btn {
+    -fx-background-color: #242424;
+    -fx-border-color: #383838;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 4px 6px;
+    -fx-cursor: hand;
+}
+
+.modal-close-btn:hover {
+    -fx-background-color: rgba(239, 68, 68, 0.20);
+    -fx-border-color: #EF4444;
+}
+
+.modal-close-btn:pressed {
+    -fx-background-color: rgba(239, 68, 68, 0.35);
+    -fx-border-color: #EF4444;
+}
+
+.patch-cancel-btn {
+    -fx-background-color: #2A2A2A;
+    -fx-text-fill: #D1D5DB;
+    -fx-border-color: #383838;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 6px 14px;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+}
+
+.patch-cancel-btn:hover {
+    -fx-background-color: #333333;
+    -fx-border-color: #4B5563;
+    -fx-text-fill: #F3F4F6;
+}
+

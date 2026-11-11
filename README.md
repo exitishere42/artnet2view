@@ -24,7 +24,7 @@
 - **Hardware-Accelerated 3D Stage Visualizer**: Real-time 60+ FPS viewport rendering dark stage floors, modular F34 aluminum trusses, volumetric light cones, and vibrant beam colors with zero texture-upload stalls.
 - **3D Transformation Gizmo (X/Y/Z Axis Arrows)**: Select any fixture in the 3D scene to reveal color-coded axis arrows (`X` Red, `Y` Green, `Z` Blue) for direct drag positioning, paired with axis nudge arrows and Pan/Tilt orientation controls in the inspector dock.
 - **Portable `.a2v` Project System & Brand Menu (`[ artnet2view ]`)**:
-  - Click the top-left logo button to access `New Project`, `Open Project (*.a2v)`, `Save Project`, `Save As`, `Fullscreen`, and `About`.
+  - Click the top-left logo button to access `Save`, `Save As...`, in-app GitHub `Updates` (with live Markdown release notes and one-click installer), `Fullscreen`, and `Exit`.
   - Clean JSON-based `.a2v` project format storing all fixtures, trusses, 3D transforms, and DMX patches alongside embedded H2 database persistence.
 - **Touchpad-Optimized Orbit Navigation**:
   - Multi-touch pinch-to-zoom, damped two-finger scrolling, single-finger orbiting, and multi-modifier panning (`Shift` / `Ctrl` / `Alt` / Right-Click).
@@ -136,7 +136,7 @@ mvn clean test
 mvn clean package
 ```
 
-The standalone executable fat JAR will be generated at `target/artnet2view-1.1.0-all.jar`.
+The standalone executable fat JAR will be generated at `target/artnet2view-1.2.0-all.jar`.
 
 ---
 
