@@ -10,19 +10,37 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.util.Objects;
+import java.util.function.Consumer;
+
 /**
  * Inspector dock presenting the properties of the currently selected fixture.
+ * Supports fast in-place value synchronization during 3D gizmo drags without rebuilding UI nodes.
  */
 public class FixtureInspector extends VBox {
 
     private final RigService rigService;
+    private final Consumer<Fixture> onFixtureUpdated;
     private final Runnable onStageModified;
 
     private final VBox contentBox;
     private final Label emptyLabel;
 
+    private Fixture activeFixture;
+    private boolean suppressSync = false;
+    private Spinner<Double> spinX;
+    private Spinner<Double> spinY;
+    private Spinner<Double> spinZ;
+    private Spinner<Double> spinYaw;
+    private Spinner<Double> spinPitch;
+
     public FixtureInspector(RigService rigService, Runnable onStageModified) {
+        this(rigService, null, onStageModified);
+    }
+
+    public FixtureInspector(RigService rigService, Consumer<Fixture> onFixtureUpdated, Runnable onStageModified) {
         this.rigService = rigService;
+        this.onFixtureUpdated = onFixtureUpdated;
         this.onStageModified = onStageModified;
 
         setPrefWidth(300);
@@ -32,14 +50,13 @@ public class FixtureInspector extends VBox {
         setSpacing(12);
         setStyle("-fx-background-color: " + ThemeConstants.BG_CARD + "; -fx-border-color: " + ThemeConstants.BORDER_COLOR + "; -fx-border-width: 0 0 0 1;");
 
-        // Header
         HBox header = new HBox(8);
         header.setAlignment(Pos.CENTER_LEFT);
+        Label titleLabel = new Label("Inspektor");
+        titleLabel.getStyleClass().add("label-title");
         header.getChildren().addAll(
                 LucideIcon.create(LucideIcon.SLIDERS, 16, ThemeConstants.PRIMARY_COLOR),
-                new Label("Inspektor") {{
-                    getStyleClass().add("label-title");
-                }}
+                titleLabel
         );
 
         this.emptyLabel = new Label("Kein Element ausgewählt.\nKlicke ein Fixture im 3D-Raum an.");
@@ -50,12 +67,66 @@ public class FixtureInspector extends VBox {
 
         getChildren().addAll(header, new Separator(), emptyLabel, contentBox);
 
-        // Listen to selection changes
-        rigService.selectedFixtureProperty().addListener((obs, oldFix, newFix) -> updateUI(newFix));
+        rigService.selectedFixtureProperty().addListener((obs, oldFix, newFix) -> {
+            if (newFix != null && activeFixture != null && Objects.equals(newFix.id(), activeFixture.id())) {
+                syncFromModel(newFix);
+            } else {
+                updateUI(newFix);
+            }
+        });
         updateUI(rigService.getSelectedFixture());
     }
 
+    /**
+     * Updates spinner values in-place when the active fixture transform changes (e.g. via 3D gizmo drag).
+     *
+     * @param updated updated fixture snapshot
+     */
+    public void syncFromModel(Fixture updated) {
+        if (updated == null || activeFixture == null || !Objects.equals(updated.id(), activeFixture.id())) {
+            return;
+        }
+        this.activeFixture = updated;
+        suppressSync = true;
+        try {
+            Transform3D t = updated.transform();
+            if (spinX != null && spinX.getValueFactory() != null) {
+                spinX.getValueFactory().setValue(t.x());
+            }
+            if (spinY != null && spinY.getValueFactory() != null) {
+                spinY.getValueFactory().setValue(t.y());
+            }
+            if (spinZ != null && spinZ.getValueFactory() != null) {
+                spinZ.getValueFactory().setValue(t.z());
+            }
+            if (spinYaw != null && spinYaw.getValueFactory() != null) {
+                spinYaw.getValueFactory().setValue(t.yaw());
+            }
+            if (spinPitch != null && spinPitch.getValueFactory() != null) {
+                spinPitch.getValueFactory().setValue(t.pitch());
+            }
+        } finally {
+            suppressSync = false;
+        }
+    }
+
+    private void notifyFixtureUpdated(Fixture updated) {
+        this.activeFixture = updated;
+        rigService.updateFixture(updated, updated);
+        if (onFixtureUpdated != null) {
+            onFixtureUpdated.accept(updated);
+        } else if (onStageModified != null) {
+            onStageModified.run();
+        }
+    }
+
     private void updateUI(Fixture fixture) {
+        this.activeFixture = fixture;
+        this.spinX = null;
+        this.spinY = null;
+        this.spinZ = null;
+        this.spinYaw = null;
+        this.spinPitch = null;
         contentBox.getChildren().clear();
 
         if (fixture == null) {
@@ -67,30 +138,27 @@ public class FixtureInspector extends VBox {
         emptyLabel.setVisible(false);
         emptyLabel.setManaged(false);
 
-        // Fixture Name
         VBox nameBox = new VBox(4);
         nameBox.getChildren().add(new Label("Name"));
         TextField nameField = new TextField(fixture.name());
         nameField.textProperty().addListener((obs, o, n) -> {
-            if (!n.isBlank()) {
+            if (!suppressSync && !n.isBlank() && activeFixture != null) {
                 Fixture updated = new Fixture(
-                        fixture.id(), n, fixture.type(), fixture.universe(),
-                        fixture.startChannel(), fixture.channelCount(), fixture.transform(),
-                        fixture.panInvert(), fixture.tiltInvert(), fixture.beamAngle()
+                        activeFixture.id(), n, activeFixture.type(), activeFixture.universe(),
+                        activeFixture.startChannel(), activeFixture.channelCount(), activeFixture.transform(),
+                        activeFixture.panInvert(), activeFixture.tiltInvert(), activeFixture.beamAngle()
                 );
-                rigService.updateFixture(fixture, updated);
+                notifyFixtureUpdated(updated);
             }
         });
         nameBox.getChildren().add(nameField);
 
-        // Type Badge
         HBox typeBox = new HBox(6);
         typeBox.setAlignment(Pos.CENTER_LEFT);
         Label typeLabel = new Label(fixture.type().getDisplayName());
         typeLabel.setStyle("-fx-background-color: " + ThemeConstants.BG_ELEVATED + "; -fx-padding: 3px 8px; -fx-background-radius: 4px; -fx-font-weight: bold; -fx-text-fill: " + ThemeConstants.PRIMARY_COLOR + ";");
         typeBox.getChildren().addAll(new Label("Typ:"), typeLabel);
 
-        // DMX Patching Grid
         GridPane patchGrid = new GridPane();
         patchGrid.setHgap(8);
         patchGrid.setVgap(8);
@@ -99,12 +167,14 @@ public class FixtureInspector extends VBox {
         Spinner<Integer> uniSpinner = new Spinner<>(0, 15, fixture.universe());
         uniSpinner.setPrefWidth(90);
         uniSpinner.valueProperty().addListener((obs, o, n) -> {
-            Fixture updated = new Fixture(
-                    fixture.id(), fixture.name(), fixture.type(), n,
-                    fixture.startChannel(), fixture.channelCount(), fixture.transform(),
-                    fixture.panInvert(), fixture.tiltInvert(), fixture.beamAngle()
-            );
-            rigService.updateFixture(fixture, updated);
+            if (!suppressSync && activeFixture != null) {
+                Fixture updated = new Fixture(
+                        activeFixture.id(), activeFixture.name(), activeFixture.type(), n,
+                        activeFixture.startChannel(), activeFixture.channelCount(), activeFixture.transform(),
+                        activeFixture.panInvert(), activeFixture.tiltInvert(), activeFixture.beamAngle()
+                );
+                notifyFixtureUpdated(updated);
+            }
         });
         patchGrid.add(uniSpinner, 1, 0);
 
@@ -113,46 +183,46 @@ public class FixtureInspector extends VBox {
         Spinner<Integer> chSpinner = new Spinner<>(1, Math.max(1, maxStart), fixture.startChannel());
         chSpinner.setPrefWidth(90);
         chSpinner.valueProperty().addListener((obs, o, n) -> {
-            Fixture updated = new Fixture(
-                    fixture.id(), fixture.name(), fixture.type(), fixture.universe(),
-                    n, fixture.channelCount(), fixture.transform(),
-                    fixture.panInvert(), fixture.tiltInvert(), fixture.beamAngle()
-            );
-            rigService.updateFixture(fixture, updated);
+            if (!suppressSync && activeFixture != null) {
+                Fixture updated = new Fixture(
+                        activeFixture.id(), activeFixture.name(), activeFixture.type(), activeFixture.universe(),
+                        n, activeFixture.channelCount(), activeFixture.transform(),
+                        activeFixture.panInvert(), activeFixture.tiltInvert(), activeFixture.beamAngle()
+                );
+                notifyFixtureUpdated(updated);
+            }
         });
         patchGrid.add(chSpinner, 1, 1);
 
-        // Position Inputs (X, Y, Z) with Axis Arrow Buttons (like JDMX)
         VBox posBox = new VBox(6);
         posBox.getChildren().add(new Label("Position & Achsen-Pfeile (in Metern):"));
         GridPane posGrid = new GridPane();
         posGrid.setHgap(4);
         posGrid.setVgap(6);
 
-        Spinner<Double> spinX = new Spinner<>(-20.0, 20.0, fixture.transform().x(), 0.1);
-        Spinner<Double> spinY = new Spinner<>(-10.0, 10.0, fixture.transform().y(), 0.1);
-        Spinner<Double> spinZ = new Spinner<>(-20.0, 20.0, fixture.transform().z(), 0.1);
+        spinX = new Spinner<>(-20.0, 20.0, fixture.transform().x(), 0.1);
+        spinY = new Spinner<>(-10.0, 10.0, fixture.transform().y(), 0.1);
+        spinZ = new Spinner<>(-20.0, 20.0, fixture.transform().z(), 0.1);
         spinX.setPrefWidth(72);
         spinY.setPrefWidth(72);
         spinZ.setPrefWidth(72);
 
         javafx.beans.value.ChangeListener<Double> posListener = (obs, o, n) -> {
-            Transform3D t = fixture.transform().withPosition(spinX.getValue(), spinY.getValue(), spinZ.getValue());
-            Fixture updated = new Fixture(
-                    fixture.id(), fixture.name(), fixture.type(), fixture.universe(),
-                    fixture.startChannel(), fixture.channelCount(), t,
-                    fixture.panInvert(), fixture.tiltInvert(), fixture.beamAngle()
-            );
-            rigService.updateFixture(fixture, updated);
-            if (onStageModified != null) {
-                onStageModified.run();
+            if (suppressSync || activeFixture == null) {
+                return;
             }
+            Transform3D t = activeFixture.transform().withPosition(spinX.getValue(), spinY.getValue(), spinZ.getValue());
+            Fixture updated = new Fixture(
+                    activeFixture.id(), activeFixture.name(), activeFixture.type(), activeFixture.universe(),
+                    activeFixture.startChannel(), activeFixture.channelCount(), t,
+                    activeFixture.panInvert(), activeFixture.tiltInvert(), activeFixture.beamAngle()
+            );
+            notifyFixtureUpdated(updated);
         };
         spinX.valueProperty().addListener(posListener);
         spinY.valueProperty().addListener(posListener);
         spinZ.valueProperty().addListener(posListener);
 
-        // Axis Arrow Nudge Buttons (Red=X, Green=Y, Blue=Z)
         Button btnLeftX = new Button("◀");
         btnLeftX.setStyle("-fx-font-size: 10px; -fx-text-fill: #EF4444; -fx-padding: 3px 6px;");
         btnLeftX.setOnAction(e -> spinX.decrement(5));
@@ -177,24 +247,30 @@ public class FixtureInspector extends VBox {
         btnForwardZ.setStyle("-fx-font-size: 10px; -fx-text-fill: #3B82F6; -fx-padding: 3px 6px;");
         btnForwardZ.setOnAction(e -> spinZ.increment(5));
 
-        posGrid.add(new Label("X:") {{ setStyle("-fx-text-fill: #EF4444; -fx-font-weight: bold;"); }}, 0, 0);
+        Label lblX = new Label("X:");
+        lblX.setStyle("-fx-text-fill: #EF4444; -fx-font-weight: bold;");
+        Label lblY = new Label("Y:");
+        lblY.setStyle("-fx-text-fill: #22C55E; -fx-font-weight: bold;");
+        Label lblZ = new Label("Z:");
+        lblZ.setStyle("-fx-text-fill: #3B82F6; -fx-font-weight: bold;");
+
+        posGrid.add(lblX, 0, 0);
         posGrid.add(btnLeftX, 1, 0);
         posGrid.add(spinX, 2, 0);
         posGrid.add(btnRightX, 3, 0);
 
-        posGrid.add(new Label("Y:") {{ setStyle("-fx-text-fill: #22C55E; -fx-font-weight: bold;"); }}, 0, 1);
+        posGrid.add(lblY, 0, 1);
         posGrid.add(btnDownY, 1, 1);
         posGrid.add(spinY, 2, 1);
         posGrid.add(btnUpY, 3, 1);
 
-        posGrid.add(new Label("Z:") {{ setStyle("-fx-text-fill: #3B82F6; -fx-font-weight: bold;"); }}, 0, 2);
+        posGrid.add(lblZ, 0, 2);
         posGrid.add(btnBackZ, 1, 2);
         posGrid.add(spinZ, 2, 2);
         posGrid.add(btnForwardZ, 3, 2);
 
         posBox.getChildren().add(posGrid);
 
-        // Rotation & Orientation for Moving Heads
         if (fixture.type().isMovingHead()) {
             VBox rotBox = new VBox(4);
             rotBox.getChildren().add(new Label("Pan / Tilt Ausrichtung:"));
@@ -202,22 +278,22 @@ public class FixtureInspector extends VBox {
             rotGrid.setHgap(4);
             rotGrid.setVgap(4);
 
-            Spinner<Double> spinYaw = new Spinner<>(-180.0, 180.0, fixture.transform().yaw(), 5.0);
-            Spinner<Double> spinPitch = new Spinner<>(-90.0, 90.0, fixture.transform().pitch(), 5.0);
+            spinYaw = new Spinner<>(-180.0, 180.0, fixture.transform().yaw(), 5.0);
+            spinPitch = new Spinner<>(-90.0, 90.0, fixture.transform().pitch(), 5.0);
             spinYaw.setPrefWidth(72);
             spinPitch.setPrefWidth(72);
 
             javafx.beans.value.ChangeListener<Double> rotListener = (obs, o, n) -> {
-                Transform3D t = fixture.transform().withRotation(spinPitch.getValue(), spinYaw.getValue(), fixture.transform().roll());
-                Fixture updated = new Fixture(
-                        fixture.id(), fixture.name(), fixture.type(), fixture.universe(),
-                        fixture.startChannel(), fixture.channelCount(), t,
-                        fixture.panInvert(), fixture.tiltInvert(), fixture.beamAngle()
-                );
-                rigService.updateFixture(fixture, updated);
-                if (onStageModified != null) {
-                    onStageModified.run();
+                if (suppressSync || activeFixture == null) {
+                    return;
                 }
+                Transform3D t = activeFixture.transform().withRotation(spinPitch.getValue(), spinYaw.getValue(), activeFixture.transform().roll());
+                Fixture updated = new Fixture(
+                        activeFixture.id(), activeFixture.name(), activeFixture.type(), activeFixture.universe(),
+                        activeFixture.startChannel(), activeFixture.channelCount(), t,
+                        activeFixture.panInvert(), activeFixture.tiltInvert(), activeFixture.beamAngle()
+                );
+                notifyFixtureUpdated(updated);
             };
             spinYaw.valueProperty().addListener(rotListener);
             spinPitch.valueProperty().addListener(rotListener);
@@ -252,32 +328,34 @@ public class FixtureInspector extends VBox {
             posBox.getChildren().add(rotBox);
         }
 
-        // Invert Toggles
         VBox invertBox = new VBox(6);
         CheckBox chkPanInvert = new CheckBox("Pan invertieren");
         chkPanInvert.setSelected(fixture.panInvert());
         chkPanInvert.setOnAction(e -> {
-            Fixture updated = new Fixture(
-                    fixture.id(), fixture.name(), fixture.type(), fixture.universe(),
-                    fixture.startChannel(), fixture.channelCount(), fixture.transform(),
-                    chkPanInvert.isSelected(), fixture.tiltInvert(), fixture.beamAngle()
-            );
-            rigService.updateFixture(fixture, updated);
+            if (activeFixture != null) {
+                Fixture updated = new Fixture(
+                        activeFixture.id(), activeFixture.name(), activeFixture.type(), activeFixture.universe(),
+                        activeFixture.startChannel(), activeFixture.channelCount(), activeFixture.transform(),
+                        chkPanInvert.isSelected(), activeFixture.tiltInvert(), activeFixture.beamAngle()
+                );
+                notifyFixtureUpdated(updated);
+            }
         });
 
         CheckBox chkTiltInvert = new CheckBox("Tilt invertieren");
         chkTiltInvert.setSelected(fixture.tiltInvert());
         chkTiltInvert.setOnAction(e -> {
-            Fixture updated = new Fixture(
-                    fixture.id(), fixture.name(), fixture.type(), fixture.universe(),
-                    fixture.startChannel(), fixture.channelCount(), fixture.transform(),
-                    fixture.panInvert(), chkTiltInvert.isSelected(), fixture.beamAngle()
-            );
-            rigService.updateFixture(fixture, updated);
+            if (activeFixture != null) {
+                Fixture updated = new Fixture(
+                        activeFixture.id(), activeFixture.name(), activeFixture.type(), activeFixture.universe(),
+                        activeFixture.startChannel(), activeFixture.channelCount(), activeFixture.transform(),
+                        activeFixture.panInvert(), chkTiltInvert.isSelected(), activeFixture.beamAngle()
+                );
+                notifyFixtureUpdated(updated);
+            }
         });
         invertBox.getChildren().addAll(chkPanInvert, chkTiltInvert);
 
-        // Delete Button
         Button delBtn = new Button("Fixture löschen");
         delBtn.setGraphic(LucideIcon.create(LucideIcon.TRASH_2, 14, "#FF5252"));
         delBtn.setStyle("-fx-border-color: #FF5252; -fx-text-fill: #FF5252;");

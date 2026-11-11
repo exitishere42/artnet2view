@@ -69,8 +69,8 @@ public class TransformGizmo3D extends Group {
         PhongMaterial mat = new PhongMaterial(baseColor);
         mat.setSpecularColor(Color.WHITE);
 
-        // Cylinder Shaft
-        Cylinder shaft = new Cylinder(SHAFT_RADIUS, SHAFT_LENGTH);
+        // Cylinder Shaft (8 divisions sufficient for thin axis shaft)
+        Cylinder shaft = new Cylinder(SHAFT_RADIUS, SHAFT_LENGTH, 8);
         shaft.setMaterial(mat);
 
         // Arrow Cone Tip
@@ -148,7 +148,7 @@ public class TransformGizmo3D extends Group {
     }
 
     private MeshView createCone(double baseRadius, double length, PhongMaterial material) {
-        int segments = 16;
+        int segments = 10;
         TriangleMesh mesh = new TriangleMesh();
 
         // Points: 0 is apex (Y = length), 1..segments are base ring at Y = 0

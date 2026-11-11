@@ -8,8 +8,8 @@ import javafx.scene.shape.MeshView;
 import javafx.scene.shape.TriangleMesh;
 
 /**
- * 3D Volumetric light cone rendering realistic stage haze and beam projection.
- * Optimized for 60+ FPS zero-lag rendering via pure diffuse material shading.
+ * 3D Volumetric light cone rendering stage haze and beam projection.
+ * Uses back-face culling and strict dirty-checking to avoid unnecessary GPU material updates.
  */
 public class BeamNode extends Group {
 
@@ -19,16 +19,24 @@ public class BeamNode extends Group {
     private boolean strobePhase = true;
     private long lastStrobeToggleTime = 0;
 
+    private boolean lastVisibleState = false;
+    private double lastDimmer = -1.0;
+    private double lastRed = -1.0;
+    private double lastGreen = -1.0;
+    private double lastBlue = -1.0;
+    private double lastWhite = -1.0;
+
     public BeamNode(double lengthMeters, double apexRadius, double baseRadius) {
         this.material = new PhongMaterial();
         this.material.setDiffuseColor(Color.color(1.0, 1.0, 1.0, 0.0));
         this.material.setSpecularColor(Color.TRANSPARENT);
 
-        TriangleMesh mesh = createConeMesh(20, lengthMeters, apexRadius, baseRadius);
+        TriangleMesh mesh = createConeMesh(14, lengthMeters, apexRadius, baseRadius);
         this.coneMeshView = new MeshView(mesh);
         this.coneMeshView.setMaterial(material);
-        this.coneMeshView.setCullFace(CullFace.NONE);
+        this.coneMeshView.setCullFace(CullFace.BACK);
 
+        setVisible(false);
         getChildren().add(coneMeshView);
     }
 
@@ -43,12 +51,10 @@ public class BeamNode extends Group {
             float cos = (float) Math.cos(angle);
             float sin = (float) Math.sin(angle);
 
-            // Ring 0 (Apex / Lens) at Y=0
             points[i * 3] = cos * (float) r0;
             points[i * 3 + 1] = 0.0f;
             points[i * 3 + 2] = sin * (float) r0;
 
-            // Ring 1 (Base) pointing downwards at Y = length
             points[(segments + i) * 3] = cos * (float) r1;
             points[(segments + i) * 3 + 1] = (float) length;
             points[(segments + i) * 3 + 2] = sin * (float) r1;
@@ -63,7 +69,7 @@ public class BeamNode extends Group {
             int p2 = segments + i;
             int p3 = segments + next;
 
-            // Triangle 1: p0 -> p2 -> p1
+            // Outward CCW winding matching CullFace.BACK in Y-down coordinates
             faces[faceIdx++] = p0;
             faces[faceIdx++] = 0;
             faces[faceIdx++] = p2;
@@ -71,7 +77,6 @@ public class BeamNode extends Group {
             faces[faceIdx++] = p1;
             faces[faceIdx++] = 1;
 
-            // Triangle 2: p1 -> p2 -> p3
             faces[faceIdx++] = p1;
             faces[faceIdx++] = 1;
             faces[faceIdx++] = p2;
@@ -87,12 +92,19 @@ public class BeamNode extends Group {
     }
 
     /**
-     * Updates the volumetric beam appearance with instant diffuse color shading.
+     * Updates the volumetric beam appearance if dimmer, color, or strobe visibility changed.
+     *
+     * @return {@code true} if a visual property was modified, {@code false} if skipped via dirty check
      */
-    public void update(double dimmerNorm, double redNorm, double greenNorm, double blueNorm, double whiteNorm, boolean strobeActive, double strobeHz) {
+    public boolean update(double dimmerNorm, double redNorm, double greenNorm, double blueNorm, double whiteNorm,
+                          boolean strobeActive, double strobeHz) {
         if (dimmerNorm <= 0.001) {
+            if (!lastVisibleState) {
+                return false;
+            }
+            lastVisibleState = false;
             setVisible(false);
-            return;
+            return true;
         }
 
         if (strobeActive && strobeHz > 0) {
@@ -103,28 +115,47 @@ public class BeamNode extends Group {
                 lastStrobeToggleTime = now;
             }
             if (!strobePhase) {
+                if (!lastVisibleState) {
+                    return false;
+                }
+                lastVisibleState = false;
                 setVisible(false);
-                return;
+                return true;
             }
         }
 
-        setVisible(true);
-
-        double r = Math.min(1.0, redNorm + (whiteNorm * 0.95));
-        double g = Math.min(1.0, greenNorm + (whiteNorm * 0.95));
-        double b = Math.min(1.0, blueNorm + (whiteNorm * 0.85));
-
-        // Fallback to bright warm-white if all colors are zero but dimmer is active
-        if (r < 0.01 && g < 0.01 && b < 0.01) {
-            r = 1.0;
-            g = 0.95;
-            b = 0.90;
+        boolean changed = !lastVisibleState;
+        if (!lastVisibleState) {
+            lastVisibleState = true;
+            setVisible(true);
         }
 
-        // Volumetric alpha: rich visible beam cone
-        double alpha = Math.min(0.80, dimmerNorm * 0.65);
-        Color beamColor = Color.color(r, g, b, alpha);
+        if (Math.abs(dimmerNorm - lastDimmer) > 1e-4
+                || Math.abs(redNorm - lastRed) > 1e-4
+                || Math.abs(greenNorm - lastGreen) > 1e-4
+                || Math.abs(blueNorm - lastBlue) > 1e-4
+                || Math.abs(whiteNorm - lastWhite) > 1e-4) {
+            lastDimmer = dimmerNorm;
+            lastRed = redNorm;
+            lastGreen = greenNorm;
+            lastBlue = blueNorm;
+            lastWhite = whiteNorm;
 
-        material.setDiffuseColor(beamColor);
+            double r = Math.min(1.0, redNorm + (whiteNorm * 0.95));
+            double g = Math.min(1.0, greenNorm + (whiteNorm * 0.95));
+            double b = Math.min(1.0, blueNorm + (whiteNorm * 0.85));
+
+            if (r < 0.01 && g < 0.01 && b < 0.01) {
+                r = 1.0;
+                g = 0.95;
+                b = 0.90;
+            }
+
+            double alpha = Math.min(0.80, dimmerNorm * 0.65);
+            material.setDiffuseColor(Color.color(r, g, b, alpha));
+            changed = true;
+        }
+
+        return changed;
     }
 }

@@ -3,7 +3,6 @@ package de.exit.artnet2view.ui.canvas;
 import de.exit.artnet2view.core.artnet.DmxUniverseBuffer;
 import de.exit.artnet2view.core.model.Fixture;
 import de.exit.artnet2view.core.model.TrussElement;
-import de.exit.artnet2view.ui.theme.ThemeConstants;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.AmbientLight;
@@ -23,11 +22,13 @@ import javafx.scene.shape.Cylinder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
  * Responsive 3D Stage Visualizer Canvas container.
- * Hosts the JavaFX 3D {@link SubScene}, Orbit Camera, Stage Floor, Lighting Rig, and Touchpad Quick Controls.
+ * Hosts the JavaFX 3D {@link SubScene}, Orbit Camera, batched Stage Floor/Grid, Lighting Rig, and Touchpad Quick Controls.
  */
 public class Stage3DCanvas extends Pane {
 
@@ -38,6 +39,7 @@ public class Stage3DCanvas extends Pane {
     private final OrbitCameraController cameraController;
 
     private final List<Fixture3DNode> fixtureNodes = new ArrayList<>();
+    private final byte[][] universeCache = new byte[DmxUniverseBuffer.MAX_UNIVERSES][];
     private Consumer<Fixture> selectionListener;
     private Consumer<Fixture> fixtureModifiedListener;
 
@@ -49,7 +51,14 @@ public class Stage3DCanvas extends Pane {
         PerspectiveCamera camera = new PerspectiveCamera(true);
         this.cameraController = new OrbitCameraController(camera);
 
-        this.subScene = new SubScene(root3D, 800, 600, true, SceneAntialiasing.BALANCED);
+        // Disable heavy 4x MSAA on Linux/Mesa iGPUs & HiDPI displays unless explicitly requested
+        boolean forceMsaa = Boolean.parseBoolean(System.getProperty("artnet2view.msaa", "false"));
+        boolean isLinux = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
+        SceneAntialiasing antialiasing = (isLinux && !forceMsaa)
+                ? SceneAntialiasing.DISABLED
+                : SceneAntialiasing.BALANCED;
+
+        this.subScene = new SubScene(root3D, 800, 600, true, antialiasing);
         this.subScene.setFill(Color.web("#0D0D0D"));
         this.subScene.setCamera(camera);
 
@@ -62,14 +71,12 @@ public class Stage3DCanvas extends Pane {
         root3D.getChildren().addAll(trussGroup, fixtureGroup);
         getChildren().add(subScene);
 
-        // Touchpad Quick Control Floating Dock (Bottom Left)
         HBox touchpadDock = createTouchpadDock();
         getChildren().add(touchpadDock);
 
         subScene.widthProperty().bind(widthProperty());
         subScene.heightProperty().bind(heightProperty());
 
-        // Keep Touchpad Dock positioned at bottom left
         layoutBoundsProperty().addListener((obs, oldB, newB) -> {
             touchpadDock.setLayoutX(16);
             touchpadDock.setLayoutY(newB.getHeight() - 48);
@@ -107,14 +114,11 @@ public class Stage3DCanvas extends Pane {
     }
 
     private void setupLighting() {
-        // Dedicated bright ambient light scoped to all fixtures and beams
         AmbientLight fixtureAmbient = new AmbientLight(Color.rgb(200, 200, 200));
         fixtureAmbient.getScope().add(fixtureGroup);
 
-        // General stage ambient light for dark atmospheric background
         AmbientLight stageAmbient = new AmbientLight(Color.rgb(90, 90, 90));
 
-        // Overhead point light for realistic specular highlights on trusses
         PointLight pointLight = new PointLight(Color.rgb(180, 180, 180));
         pointLight.setTranslateX(0);
         pointLight.setTranslateY(-10);
@@ -132,44 +136,23 @@ public class Stage3DCanvas extends Pane {
         floorMat.setSpecularColor(Color.web("#333333"));
         floor.setMaterial(floorMat);
 
-        root3D.getChildren().add(floor);
-
-        PhongMaterial gridMat = new PhongMaterial(Color.web("#2A2A2A"));
-        Group gridGroup = new Group();
-
-        for (double x = -6.0; x <= 6.0; x += 1.0) {
-            Box line = new Box(0.02, 0.01, 8.0);
-            line.setTranslateX(x);
-            line.setTranslateY(-0.01);
-            line.setMaterial(gridMat);
-            gridGroup.getChildren().add(line);
-        }
-
-        for (double z = -4.0; z <= 4.0; z += 1.0) {
-            Box line = new Box(12.0, 0.01, 0.02);
-            line.setTranslateZ(z);
-            line.setTranslateY(-0.01);
-            line.setMaterial(gridMat);
-            gridGroup.getChildren().add(line);
-        }
-
-        root3D.getChildren().add(gridGroup);
+        root3D.getChildren().addAll(floor, MeshFactory.createStageGridMesh(12.0, 8.0, 1.0));
     }
 
     private void setupCoordinateAxes() {
         Group axes = new Group();
 
-        Cylinder axisX = new Cylinder(0.02, 1.0);
+        Cylinder axisX = new Cylinder(0.02, 1.0, 8);
         axisX.setMaterial(new PhongMaterial(Color.web("#EF5350")));
         axisX.setRotate(90);
         axisX.setTranslateX(0.5);
         axisX.setTranslateY(-0.05);
 
-        Cylinder axisY = new Cylinder(0.02, 1.0);
+        Cylinder axisY = new Cylinder(0.02, 1.0, 8);
         axisY.setMaterial(new PhongMaterial(Color.web("#66BB6A")));
         axisY.setTranslateY(-0.55);
 
-        Cylinder axisZ = new Cylinder(0.02, 1.0);
+        Cylinder axisZ = new Cylinder(0.02, 1.0, 8);
         axisZ.setMaterial(new PhongMaterial(Color.web("#42A5F5")));
         axisZ.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);
         axisZ.setRotate(90);
@@ -211,10 +194,27 @@ public class Stage3DCanvas extends Pane {
         fixtureGroup.getChildren().add(node);
     }
 
+    /**
+     * Updates an existing 3D fixture node's transform and properties in-place without rebuilding the stage.
+     *
+     * @param updated updated fixture data
+     */
+    public void updateFixture(Fixture updated) {
+        if (updated == null || updated.id() == null) {
+            return;
+        }
+        for (Fixture3DNode node : fixtureNodes) {
+            if (Objects.equals(node.getFixture().id(), updated.id())) {
+                node.setFixtureAndTransform(updated);
+                break;
+            }
+        }
+    }
+
     public void updateSelection(Fixture selected) {
         for (Fixture3DNode node : fixtureNodes) {
-            boolean isSelected = (selected != null && node.getFixture().id() != null &&
-                    node.getFixture().id().equals(selected.id()));
+            boolean isSelected = (selected != null && node.getFixture().id() != null
+                    && node.getFixture().id().equals(selected.id()));
             node.setSelected(isSelected);
         }
     }
@@ -230,7 +230,9 @@ public class Stage3DCanvas extends Pane {
             return;
         }
 
-        byte[][] universeCache = new byte[DmxUniverseBuffer.MAX_UNIVERSES][];
+        for (int i = 0; i < universeCache.length; i++) {
+            universeCache[i] = null;
+        }
 
         for (Fixture3DNode node : fixtureNodes) {
             int u = node.getFixture().universe();

@@ -136,7 +136,7 @@ mvn clean test
 mvn clean package
 ```
 
-The standalone executable fat JAR will be generated at `target/artnet2view-1.2.0-all.jar`.
+The standalone executable fat JAR will be generated at `target/artnet2view-1.2.1-all.jar`.
 
 ---
 

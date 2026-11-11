@@ -77,17 +77,17 @@ public class Artnet2viewApplication extends Application {
         root.setCenter(stage3DCanvas);
 
         // Right Inspector Dock
-        this.inspector = new FixtureInspector(rigService, this::reloadStageFromProject);
+        this.inspector = new FixtureInspector(rigService, stage3DCanvas::updateFixture, this::reloadStageFromProject);
         root.setRight(inspector);
 
         // Wire 3D Selection with Service
         stage3DCanvas.setSelectionListener(rigService::setSelectedFixture);
         rigService.selectedFixtureProperty().addListener((obs, oldF, newF) -> stage3DCanvas.updateSelection(newF));
 
-        // Wire 3D Gizmo Arrow translation directly to rigService & inspector
+        // Wire 3D Gizmo Arrow translation directly to rigService & inspector in-place (no UI rebuild)
         stage3DCanvas.setFixtureModifiedListener(modifiedFix -> {
             rigService.updateFixture(modifiedFix, modifiedFix);
-            rigService.setSelectedFixture(modifiedFix);
+            inspector.syncFromModel(modifiedFix);
         });
 
         // Load Default Stage Setup
@@ -97,10 +97,16 @@ public class Artnet2viewApplication extends Application {
         HBox header = createHeader();
         root.setTop(header);
 
-        // Real-time 60 FPS Render Loop
+        // Real-time ~60 FPS Render Loop (rate-limited for Linux/prism.vsync=false smoothness)
         this.renderLoop = new AnimationTimer() {
+            private long lastFrameNanos = 0L;
+
             @Override
             public void handle(long now) {
+                if (now - lastFrameNanos < 15_500_000L) {
+                    return;
+                }
+                lastFrameNanos = now;
                 if (demoModeActive) {
                     runDemoFrame();
                 }
