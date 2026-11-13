@@ -41,6 +41,7 @@ public class Stage3DCanvas extends Pane {
     private final List<Fixture3DNode> fixtureNodes = new ArrayList<>();
     private final byte[][] universeCache = new byte[DmxUniverseBuffer.MAX_UNIVERSES][];
     private Consumer<Fixture> selectionListener;
+    private Consumer<TrussElement> trussSelectionListener;
     private Consumer<Fixture> fixtureModifiedListener;
 
     public Stage3DCanvas() {
@@ -171,8 +172,18 @@ public class Stage3DCanvas extends Pane {
         this.fixtureModifiedListener = fixtureModifiedListener;
     }
 
+    public void setTrussSelectionListener(Consumer<TrussElement> trussSelectionListener) {
+        this.trussSelectionListener = trussSelectionListener;
+    }
+
     public void addTruss(TrussElement truss) {
         Group trussNode = MeshFactory.createTrussNode(truss);
+        trussNode.setOnMouseClicked(e -> {
+            if (trussSelectionListener != null) {
+                trussSelectionListener.accept(truss);
+            }
+            e.consume();
+        });
         trussGroup.getChildren().add(trussNode);
     }
 

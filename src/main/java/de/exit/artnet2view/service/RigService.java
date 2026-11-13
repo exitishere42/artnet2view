@@ -107,6 +107,17 @@ public class RigService {
         }
     }
 
+    public void updateTruss(TrussElement oldTruss, TrussElement updatedTruss) {
+        if (oldTruss == null || updatedTruss == null) {
+            return;
+        }
+        getActiveProject().removeTruss(oldTruss.id());
+        getActiveProject().addTruss(updatedTruss);
+        if (selectedTrussProperty.get() != null && selectedTrussProperty.get().equals(oldTruss)) {
+            selectedTrussProperty.set(updatedTruss);
+        }
+    }
+
     public void removeTruss(Long id) {
         if (id != null) {
             getActiveProject().removeTruss(id);

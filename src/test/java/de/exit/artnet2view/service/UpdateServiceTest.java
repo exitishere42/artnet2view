@@ -14,10 +14,11 @@ class UpdateServiceTest {
     @DisplayName("Should compare SemVer release tags accurately")
     void testIsVersionNewer() {
         assertThat(UpdateService.isVersionNewer("v1.2.0", "1.1.0")).isTrue();
-        assertThat(UpdateService.isVersionNewer("v1.3.0", UpdateService.CURRENT_VERSION)).isTrue();
+        assertThat(UpdateService.isVersionNewer("v1.4.0", UpdateService.CURRENT_VERSION)).isTrue();
         assertThat(UpdateService.isVersionNewer("v1.1.1", "1.1.0")).isTrue();
         assertThat(UpdateService.isVersionNewer("v2.0.0", "1.1.0")).isTrue();
 
+        assertThat(UpdateService.isVersionNewer("v1.3.0", UpdateService.CURRENT_VERSION)).isFalse();
         assertThat(UpdateService.isVersionNewer("v1.2.0", UpdateService.CURRENT_VERSION)).isFalse();
         assertThat(UpdateService.isVersionNewer("v1.1.0", "1.1.0")).isFalse();
         assertThat(UpdateService.isVersionNewer("1.1.0", "1.1.0")).isFalse();

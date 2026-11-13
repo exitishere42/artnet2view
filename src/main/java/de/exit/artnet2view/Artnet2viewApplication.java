@@ -9,6 +9,7 @@ import de.exit.artnet2view.service.RigRepository;
 import de.exit.artnet2view.service.RigService;
 import de.exit.artnet2view.ui.canvas.Stage3DCanvas;
 import de.exit.artnet2view.ui.components.FixtureInspector;
+import de.exit.artnet2view.ui.components.RightDockView;
 import de.exit.artnet2view.ui.dialog.AboutUpdateDialog;
 import de.exit.artnet2view.ui.menu.BrandActionMenu;
 import de.exit.artnet2view.ui.theme.LucideIcon;
@@ -48,7 +49,7 @@ public class Artnet2viewApplication extends Application {
     private A2vProjectService a2vProjectService;
 
     private Stage3DCanvas stage3DCanvas;
-    private FixtureInspector inspector;
+    private RightDockView rightDockView;
     private AnimationTimer renderLoop;
     private Stage primaryStage;
     private StackPane overlayPane;
@@ -78,18 +79,24 @@ public class Artnet2viewApplication extends Application {
         this.stage3DCanvas = new Stage3DCanvas();
         root.setCenter(stage3DCanvas);
 
-        // Right Inspector Dock
-        this.inspector = new FixtureInspector(rigService, stage3DCanvas::updateFixture, this::reloadStageFromProject);
-        root.setRight(inspector);
+        // Right Dock (Project Explorer & Inspector Tabs)
+        this.rightDockView = new RightDockView(
+                rigService,
+                stage3DCanvas::updateFixture,
+                this::reloadStageFromProject,
+                nextEntityId::incrementAndGet
+        );
+        root.setRight(rightDockView);
 
         // Wire 3D Selection with Service
         stage3DCanvas.setSelectionListener(rigService::setSelectedFixture);
+        stage3DCanvas.setTrussSelectionListener(rigService::setSelectedTruss);
         rigService.selectedFixtureProperty().addListener((obs, oldF, newF) -> stage3DCanvas.updateSelection(newF));
 
         // Wire 3D Gizmo Arrow translation directly to rigService & inspector in-place (no UI rebuild)
         stage3DCanvas.setFixtureModifiedListener(modifiedFix -> {
             rigService.updateFixture(modifiedFix, modifiedFix);
-            inspector.syncFromModel(modifiedFix);
+            rightDockView.getInspector().syncFromModel(modifiedFix);
         });
 
         // Load Default Stage Setup
@@ -211,6 +218,9 @@ public class Artnet2viewApplication extends Application {
         }
 
         stage3DCanvas.updateSelection(rigService.getSelectedFixture());
+        if (rightDockView != null) {
+            rightDockView.rebuildExplorer();
+        }
     }
 
     private HBox createHeader() {
@@ -271,62 +281,6 @@ public class Artnet2viewApplication extends Application {
 
         presets.getChildren().addAll(btn3d, btnTop, btnFront, btnSide);
 
-        // Add Elements Buttons
-        HBox addTools = new HBox(6);
-        addTools.setAlignment(Pos.CENTER_LEFT);
-
-        Button addSpotBtn = new Button("+ ZQ02040");
-        addSpotBtn.setOnAction(e -> {
-            long id = nextEntityId.incrementAndGet();
-            Fixture spot = new Fixture(
-                    id,
-                    "ZQ02040 " + id,
-                    FixtureType.MOVING_HEAD_ZQ02040,
-                    0,
-                    1,
-                    11,
-                    new Transform3D(0, -3.5, 0, 0, 0, 0),
-                    false,
-                    false,
-                    6.0
-            );
-            rigService.addFixture(spot);
-            reloadStageFromProject();
-        });
-
-        Button addParBtn = new Button("+ Par");
-        addParBtn.setOnAction(e -> {
-            long id = nextEntityId.incrementAndGet();
-            Fixture par = new Fixture(
-                    id,
-                    "Par " + id,
-                    FixtureType.LED_PAR,
-                    0,
-                    1,
-                    8,
-                    new Transform3D(0, -0.2, 0, 0, 0, 0),
-                    false,
-                    false,
-                    25.0
-            );
-            rigService.addFixture(par);
-            reloadStageFromProject();
-        });
-
-        Button addTrussBtn = new Button("+ Traverse");
-        addTrussBtn.setOnAction(e -> {
-            long id = nextEntityId.incrementAndGet();
-            TrussElement truss = new TrussElement(
-                    id,
-                    TrussType.STRAIGHT_2M,
-                    new Transform3D(0, -3.5, 0, 0, 0, 0)
-            );
-            rigService.addTruss(truss);
-            reloadStageFromProject();
-        });
-
-        addTools.getChildren().addAll(addSpotBtn, addParBtn, addTrussBtn);
-
         // Demo Mode Toggle Button
         ToggleButton demoBtn = new ToggleButton("Demo Mode");
         demoBtn.setOnAction(e -> {
@@ -358,8 +312,6 @@ public class Artnet2viewApplication extends Application {
                 brandBtn,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 presets,
-                new Separator(javafx.geometry.Orientation.VERTICAL),
-                addTools,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 demoBtn,
                 spacer,

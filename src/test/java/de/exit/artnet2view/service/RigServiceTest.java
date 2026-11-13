@@ -108,4 +108,25 @@ class RigServiceTest {
         assertThat(rigService.getActiveProject().getName()).isEqualTo("Festival Stage");
         assertThat(rigService.getActiveProject().getFixtures()).hasSize(1);
     }
+
+    @Test
+    @DisplayName("RigService adds, updates, selects, and removes trusses")
+    void testTrussOperations() {
+        TrussElement truss = new TrussElement(1L, TrussType.STRAIGHT_2M, new Transform3D(0, -3.5, 0, 0, 0, 0));
+        rigService.addTruss(truss);
+
+        assertThat(rigService.getActiveProject().getTrusses()).hasSize(1);
+        assertThat(rigService.getSelectedTruss()).isEqualTo(truss);
+        assertThat(rigService.getSelectedFixture()).isNull();
+
+        TrussElement updated = new TrussElement(1L, TrussType.STRAIGHT_2M, new Transform3D(1.0, -3.5, 0, 0, 45, 0));
+        rigService.updateTruss(truss, updated);
+
+        assertThat(rigService.getActiveProject().getTrusses()).hasSize(1);
+        assertThat(rigService.getSelectedTruss()).isEqualTo(updated);
+
+        rigService.removeTruss(1L);
+        assertThat(rigService.getActiveProject().getTrusses()).isEmpty();
+        assertThat(rigService.getSelectedTruss()).isNull();
+    }
 }
