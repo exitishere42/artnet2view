@@ -20,30 +20,34 @@ import javafx.scene.layout.VBox;
 import java.util.function.Consumer;
 
 /**
- * Modal overlay dialog showing installed vs. latest GitHub release version,
- * rendered Markdown release notes, and one-click self-update installation.
+ * In-App Modal Dialog for checking and applying software updates.
+ * Styled identically to JDMX's AboutUpdateDialog.
  */
 public class AboutUpdateDialog extends VBox {
 
     private final Runnable closeCallback;
 
-    private final Label availableVersionValue;
-    private final ProgressIndicator checkSpinner;
-    private final Label statusLabel;
-    private final MarkdownView releaseNotesView;
-
-    private final VBox progressContainer;
-    private final ProgressBar downloadProgressBar;
-    private final Label downloadStatusLabel;
-
-    private final Button githubBtn;
-    private final Button retryBtn;
-    private final Button updateBtn;
-
-    private UpdateService.ReleaseInfo latestRelease;
+    private Label lblTitle;
+    private Label lblCurTitle;
+    private Label lblLatTitle;
+    private Label lblCurrentVersion;
+    private Label lblLatestVersion;
+    private Label lblStatus;
+    private ProgressIndicator spinner;
+    private MarkdownView markdownChangelog;
+    private ProgressBar progressBar;
+    private Label lblProgressDetail;
+    private HBox actionButtonBox;
+    private Button btnClose;
+    private Button btnCloseFooter;
+    private Button btnUpdate;
+    private Button btnRetry;
+    private UpdateService.ReleaseInfo lastRelease;
+    private boolean isChecking = true;
+    private boolean isError = false;
 
     /**
-     * Constructs the modal update dialog and immediately initiates an async GitHub release check.
+     * Constructs the update dialog card and immediately initiates an async GitHub release check.
      *
      * @param closeCallback callback invoked when the user closes the dialog
      */
@@ -51,145 +55,19 @@ public class AboutUpdateDialog extends VBox {
         this.closeCallback = closeCallback != null ? closeCallback : () -> {};
 
         getStyleClass().add("settings-dialog-card");
-        setPrefWidth(540);
-        setMaxWidth(540);
-        setMaxHeight(600);
+        setMinWidth(520);
+        setPrefWidth(550);
+        setMaxWidth(580);
+        setMaxHeight(Region.USE_PREF_SIZE);
         setSpacing(14);
-        setPadding(new Insets(18, 22, 18, 22));
         setOnMouseClicked(Event::consume);
 
-        // Header
-        HBox header = new HBox(10);
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.getStyleClass().add("settings-dialog-header");
-
-        Node titleIcon = LucideIcon.create(LucideIcon.ARROW_UP_CIRCLE, 18, "#38BDF8");
-        Label titleLabel = new Label("Software-Updates");
-        titleLabel.getStyleClass().add("settings-dialog-title");
-
-        Region headerSpacer = new Region();
-        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
-
-        Button closeBtn = new Button();
-        closeBtn.setGraphic(LucideIcon.create(LucideIcon.X, 14, "#A1A1AA"));
-        closeBtn.getStyleClass().add("modal-close-btn");
-        closeBtn.setOnAction(e -> this.closeCallback.run());
-
-        header.getChildren().addAll(titleIcon, titleLabel, headerSpacer, closeBtn);
-
-        // Version Overview Card
-        HBox versionCard = new HBox(24);
-        versionCard.setAlignment(Pos.CENTER_LEFT);
-        versionCard.setPadding(new Insets(12, 16, 12, 16));
-        versionCard.setStyle("-fx-background-color: #141417; -fx-border-color: #27272A; "
-                + "-fx-border-width: 1px; -fx-border-radius: 6px; -fx-background-radius: 6px;");
-
-        VBox installedBox = new VBox(3);
-        Label installedTitle = new Label("INSTALLIERTE VERSION");
-        installedTitle.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #71717A;");
-        Label installedValue = new Label("v" + UpdateService.CURRENT_VERSION);
-        installedValue.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; "
-                + "-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #F4F4F5;");
-        installedBox.getChildren().addAll(installedTitle, installedValue);
-
-        Region vSep = new Region();
-        vSep.setMinWidth(1);
-        vSep.setPrefWidth(1);
-        vSep.setMaxWidth(1);
-        vSep.setStyle("-fx-background-color: #27272A;");
-
-        VBox availableBox = new VBox(3);
-        Label availableTitle = new Label("NEUESTE VERSION");
-        availableTitle.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #71717A;");
-        availableVersionValue = new Label("Prüfe...");
-        availableVersionValue.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; "
-                + "-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #38BDF8;");
-        availableBox.getChildren().addAll(availableTitle, availableVersionValue);
-
-        versionCard.getChildren().addAll(installedBox, vSep, availableBox);
-
-        // Status Line
-        HBox statusRow = new HBox(8);
-        statusRow.setAlignment(Pos.CENTER_LEFT);
-
-        checkSpinner = new ProgressIndicator();
-        checkSpinner.setPrefSize(16, 16);
-        checkSpinner.setMaxSize(16, 16);
-
-        statusLabel = new Label("Suche nach Updates auf GitHub...");
-        statusLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #D4D4D8;");
-        statusLabel.setWrapText(true);
-
-        statusRow.getChildren().addAll(checkSpinner, statusLabel);
-
-        // Release Notes
-        Label notesHeader = new Label("VERSIONS-HINWEISE");
-        notesHeader.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #71717A;");
-
-        releaseNotesView = new MarkdownView();
-        releaseNotesView.setPrefHeight(220);
-        releaseNotesView.setMinHeight(160);
-        VBox.setVgrow(releaseNotesView, Priority.ALWAYS);
-        releaseNotesView.setMarkdown("Verbinde mit GitHub Releases...");
-
-        // Download Progress
-        progressContainer = new VBox(6);
-        progressContainer.setVisible(false);
-        progressContainer.setManaged(false);
-
-        downloadProgressBar = new ProgressBar(0);
-        downloadProgressBar.setMaxWidth(Double.MAX_VALUE);
-        downloadProgressBar.setPrefHeight(8);
-        downloadProgressBar.setStyle("-fx-accent: #38BDF8;");
-
-        downloadStatusLabel = new Label("Bereite Download vor...");
-        downloadStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #9CA3AF;");
-
-        progressContainer.getChildren().addAll(downloadProgressBar, downloadStatusLabel);
-
-        // Footer Buttons
-        HBox footer = new HBox(8);
-        footer.setAlignment(Pos.CENTER_LEFT);
-        footer.setPadding(new Insets(4, 0, 0, 0));
-
-        githubBtn = new Button("GitHub öffnen");
-        githubBtn.setGraphic(LucideIcon.create(LucideIcon.EXTERNAL_LINK, 13, "#E4E4E7"));
-        githubBtn.getStyleClass().add("patch-cancel-btn");
-        githubBtn.setOnAction(e -> {
-            String targetUrl = latestRelease != null && latestRelease.htmlUrl() != null
-                    ? latestRelease.htmlUrl()
-                    : UpdateService.REPO_URL + "/releases";
-            UpdateService.openWebpage(targetUrl);
-        });
-
-        Region footerSpacer = new Region();
-        HBox.setHgrow(footerSpacer, Priority.ALWAYS);
-
-        retryBtn = new Button("Erneut prüfen");
-        retryBtn.getStyleClass().add("patch-cancel-btn");
-        retryBtn.setOnAction(e -> checkUpdates());
-
-        updateBtn = new Button("Jetzt aktualisieren");
-        updateBtn.setGraphic(LucideIcon.create(LucideIcon.DOWNLOAD, 14, "#FFFFFF"));
-        updateBtn.setStyle("-fx-background-color: #0284C7; -fx-text-fill: #FFFFFF; -fx-font-weight: 700; "
-                + "-fx-font-size: 12px; -fx-padding: 7 16; -fx-background-radius: 6px; -fx-cursor: hand;");
-        updateBtn.setVisible(false);
-        updateBtn.setManaged(false);
-        updateBtn.setOnAction(e -> triggerUpdate());
-
-        Button closeFooterBtn = new Button("Schließen");
-        closeFooterBtn.getStyleClass().add("patch-cancel-btn");
-        closeFooterBtn.setOnAction(e -> this.closeCallback.run());
-
-        footer.getChildren().addAll(githubBtn, footerSpacer, retryBtn, updateBtn, closeFooterBtn);
-
-        getChildren().addAll(header, versionCard, statusRow, notesHeader, releaseNotesView, progressContainer, footer);
-
-        checkUpdates();
+        buildUi();
+        checkForUpdates();
     }
 
     /**
-     * Convenience helper displaying the dialog inside an overlay host.
+     * Helper displaying the dialog inside an overlay host.
      *
      * @param showOverlay callback to mount and fade in a dialog node
      * @param hideOverlay callback to hide and unmount the active dialog node
@@ -201,85 +79,291 @@ public class AboutUpdateDialog extends VBox {
         }
     }
 
-    private void checkUpdates() {
-        checkSpinner.setVisible(true);
-        checkSpinner.setManaged(true);
-        availableVersionValue.setText("Prüfe...");
-        availableVersionValue.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; "
-                + "-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #38BDF8;");
-        statusLabel.setText("Suche nach Updates auf GitHub...");
-        statusLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #D4D4D8;");
-        updateBtn.setVisible(false);
-        updateBtn.setManaged(false);
-        retryBtn.setDisable(true);
+    private void buildUi() {
+        // 1. Header (Icon, Titel, roter Schließen-Button)
+        HBox header = buildHeader();
 
-        UpdateService.checkLatestRelease().whenComplete((release, ex) -> Platform.runLater(() -> {
-            checkSpinner.setVisible(false);
-            checkSpinner.setManaged(false);
-            retryBtn.setDisable(false);
+        // 2. Versions-Kachel (Installiert vs. Neueste Version)
+        HBox versionCard = buildVersionCard();
 
-            if (ex != null || release == null) {
-                Throwable cause = ex != null && ex.getCause() != null ? ex.getCause() : ex;
-                String msg = cause != null && cause.getMessage() != null ? cause.getMessage() : "Unbekannter Fehler";
-                availableVersionValue.setText("Fehler");
-                availableVersionValue.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; "
-                        + "-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #EF4444;");
-                statusLabel.setText("Update-Prüfung fehlgeschlagen: " + msg);
-                statusLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #EF4444;");
-                releaseNotesView.setMarkdown("Konnte GitHub Releases nicht abrufen.\n\n**Fehler:** `" + msg + "`");
-                return;
-            }
+        // 3. Status & Update-Bereich
+        VBox statusCard = buildStatusCard();
 
-            this.latestRelease = release;
-            String displayTag = release.tagName().startsWith("v") ? release.tagName() : "v" + release.tagName();
-            availableVersionValue.setText(displayTag);
+        // 4. Footer (GitHub Link & Schließen)
+        HBox footer = buildFooter();
 
-            if (release.isNewer()) {
-                availableVersionValue.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; "
-                        + "-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #10B981;");
-                statusLabel.setText("Neue Version verfügbar!");
-                statusLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: 700; -fx-text-fill: #10B981;");
-                updateBtn.setVisible(true);
-                updateBtn.setManaged(true);
-                updateBtn.setDisable(false);
-            } else {
-                availableVersionValue.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; "
-                        + "-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #A1A1AA;");
-                statusLabel.setText("artnet2view ist auf dem neuesten Stand.");
-                statusLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #D4D4D8;");
-            }
-
-            releaseNotesView.setMarkdown(release.body());
-        }));
+        getChildren().addAll(header, versionCard, statusCard, footer);
     }
 
-    private void triggerUpdate() {
-        if (latestRelease == null) {
-            return;
-        }
-        updateBtn.setDisable(true);
-        retryBtn.setDisable(true);
-        progressContainer.setVisible(true);
-        progressContainer.setManaged(true);
-        downloadProgressBar.setProgress(-1);
-        downloadStatusLabel.setText("Starte Download...");
+    private HBox buildHeader() {
+        HBox header = new HBox(10);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.getStyleClass().add("settings-dialog-header");
 
-        UpdateService.performUpdate(
-                latestRelease,
-                progress -> Platform.runLater(() -> downloadProgressBar.setProgress(progress)),
-                status -> Platform.runLater(() -> downloadStatusLabel.setText(status))
-        ).whenComplete((unused, ex) -> {
-            if (ex != null) {
-                Platform.runLater(() -> {
-                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    String msg = cause != null && cause.getMessage() != null ? cause.getMessage() : "Download fehlgeschlagen";
-                    downloadStatusLabel.setText("Fehler: " + msg);
-                    downloadStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #EF4444;");
-                    downloadProgressBar.setProgress(0);
-                    updateBtn.setDisable(false);
-                    retryBtn.setDisable(false);
-                });
-            }
+        Node iconLogo = LucideIcon.create(LucideIcon.ARROW_UP_CIRCLE, 20, "#38BDF8");
+        this.lblTitle = new Label("Software-Updates");
+        lblTitle.getStyleClass().add("settings-dialog-title");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        this.btnClose = new Button();
+        btnClose.getStyleClass().add("modal-close-btn");
+        Node closeIcon = LucideIcon.create(LucideIcon.X, 14, "#EF4444");
+        btnClose.setGraphic(closeIcon);
+        btnClose.setOnAction(e -> close());
+
+        header.getChildren().addAll(iconLogo, lblTitle, spacer, btnClose);
+        return header;
+    }
+
+    private HBox buildVersionCard() {
+        HBox versionCard = new HBox(16);
+        versionCard.setAlignment(Pos.CENTER_LEFT);
+        versionCard.setPadding(new Insets(12, 16, 12, 16));
+        versionCard.setStyle("-fx-background-color: #18181B; -fx-border-color: #27272A; -fx-border-width: 1px; -fx-background-radius: 4px; -fx-border-radius: 4px;");
+
+        // Installierte Version
+        VBox curBox = new VBox(2);
+        this.lblCurTitle = new Label("INSTALLIERTE VERSION");
+        lblCurTitle.setStyle("-fx-text-fill: #9CA3AF; -fx-font-size: 10px; -fx-font-weight: bold;");
+        this.lblCurrentVersion = new Label("v" + UpdateService.CURRENT_VERSION);
+        lblCurrentVersion.setStyle("-fx-text-fill: #F3F4F6; -fx-font-size: 14px; -fx-font-weight: bold;");
+        curBox.getChildren().addAll(lblCurTitle, lblCurrentVersion);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        // Neueste Version auf GitHub
+        VBox latBox = new VBox(2);
+        latBox.setAlignment(Pos.CENTER_RIGHT);
+        this.lblLatTitle = new Label("NEUESTE VERSION");
+        lblLatTitle.setStyle("-fx-text-fill: #9CA3AF; -fx-font-size: 10px; -fx-font-weight: bold;");
+        this.lblLatestVersion = new Label("Prüfe...");
+        lblLatestVersion.setStyle("-fx-text-fill: #38BDF8; -fx-font-size: 14px; -fx-font-weight: bold;");
+        latBox.getChildren().addAll(lblLatTitle, lblLatestVersion);
+
+        versionCard.getChildren().addAll(curBox, spacer, latBox);
+        return versionCard;
+    }
+
+    private VBox buildStatusCard() {
+        VBox statusCard = new VBox(10);
+        statusCard.setPadding(new Insets(12, 16, 12, 16));
+        statusCard.setStyle("-fx-background-color: #18181B; -fx-border-color: #27272A; -fx-border-width: 1px; -fx-background-radius: 4px; -fx-border-radius: 4px;");
+
+        // Status-Zeile mit Spinner
+        HBox statusRow = new HBox(10);
+        statusRow.setAlignment(Pos.CENTER_LEFT);
+
+        this.spinner = new ProgressIndicator();
+        spinner.setMaxSize(16, 16);
+        spinner.setMinSize(16, 16);
+        spinner.setPrefSize(16, 16);
+        spinner.setStyle("-fx-progress-color: #38BDF8;");
+
+        this.lblStatus = new Label("Suche nach Updates auf GitHub...");
+        lblStatus.setStyle("-fx-text-fill: #F3F4F6; -fx-font-size: 12px;");
+        statusRow.getChildren().addAll(spinner, lblStatus);
+
+        // Changelog / Release Notes als native formatierte MarkdownView
+        this.markdownChangelog = new MarkdownView();
+        markdownChangelog.setMaxHeight(200);
+        markdownChangelog.setPrefHeight(180);
+        markdownChangelog.setVisible(false);
+        markdownChangelog.setManaged(false);
+
+        // Fortschrittsbalken für Download
+        this.progressBar = new ProgressBar(0);
+        progressBar.setMaxWidth(Double.MAX_VALUE);
+        progressBar.setStyle("-fx-accent: #38BDF8;");
+        progressBar.setVisible(false);
+        progressBar.setManaged(false);
+
+        this.lblProgressDetail = new Label();
+        lblProgressDetail.setStyle("-fx-text-fill: #9CA3AF; -fx-font-size: 11px;");
+        lblProgressDetail.setVisible(false);
+        lblProgressDetail.setManaged(false);
+
+        // Aktionsbuttons (innenliegend rechtsbündig)
+        this.actionButtonBox = new HBox(8);
+        actionButtonBox.setAlignment(Pos.CENTER_RIGHT);
+
+        statusCard.getChildren().addAll(statusRow, markdownChangelog, progressBar, lblProgressDetail, actionButtonBox);
+        return statusCard;
+    }
+
+    private HBox buildFooter() {
+        HBox footer = new HBox(10);
+        footer.setAlignment(Pos.CENTER_LEFT);
+
+        Button btnGithub = new Button("GitHub");
+        btnGithub.getStyleClass().add("patch-cancel-btn");
+        btnGithub.setGraphic(LucideIcon.create(LucideIcon.EXTERNAL_LINK, 13, "#9CA3AF"));
+        btnGithub.setOnAction(e -> {
+            String targetUrl = lastRelease != null && lastRelease.htmlUrl() != null
+                    ? lastRelease.htmlUrl()
+                    : UpdateService.REPO_URL + "/releases";
+            UpdateService.openWebpage(targetUrl);
         });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        this.btnCloseFooter = new Button("Schließen");
+        btnCloseFooter.getStyleClass().add("patch-cancel-btn");
+        btnCloseFooter.setOnAction(e -> close());
+
+        footer.getChildren().addAll(btnGithub, spacer, btnCloseFooter);
+        return footer;
+    }
+
+    /**
+     * Startet die asynchrone Prüfung gegen die GitHub Releases API.
+     */
+    public void checkForUpdates() {
+        this.isChecking = true;
+        this.isError = false;
+        spinner.setVisible(true);
+        spinner.setManaged(true);
+        lblStatus.setText("Suche nach Updates auf GitHub...");
+        lblStatus.setStyle("-fx-text-fill: #F3F4F6; -fx-font-size: 12px;");
+        lblLatestVersion.setText("Prüfe...");
+        lblLatestVersion.setStyle("-fx-text-fill: #38BDF8; -fx-font-size: 14px; -fx-font-weight: bold;");
+        markdownChangelog.setVisible(false);
+        markdownChangelog.setManaged(false);
+        progressBar.setVisible(false);
+        progressBar.setManaged(false);
+        lblProgressDetail.setVisible(false);
+        lblProgressDetail.setManaged(false);
+        actionButtonBox.getChildren().clear();
+
+        UpdateService.checkLatestRelease()
+                .thenAccept(release -> Platform.runLater(() -> applyReleaseResult(release)))
+                .exceptionally(ex -> {
+                    Platform.runLater(() -> applyErrorResult(ex.getMessage()));
+                    return null;
+                });
+    }
+
+    private void applyReleaseResult(UpdateService.ReleaseInfo release) {
+        this.isChecking = false;
+        this.isError = false;
+        this.lastRelease = release;
+        spinner.setVisible(false);
+        spinner.setManaged(false);
+
+        String displayTag = release.tagName().startsWith("v") ? release.tagName() : "v" + release.tagName();
+        lblLatestVersion.setText(displayTag);
+
+        if (release.isNewer()) {
+            lblStatus.setText("Neue Version verfügbar: " + displayTag);
+            lblStatus.setStyle("-fx-text-fill: #38BDF8; -fx-font-size: 12px; -fx-font-weight: bold;");
+
+            if (release.body() != null && !release.body().isBlank()) {
+                markdownChangelog.setMarkdown(release.body());
+                markdownChangelog.setVisible(true);
+                markdownChangelog.setManaged(true);
+            }
+
+            this.btnUpdate = new Button("Jetzt aktualisieren");
+            btnUpdate.setStyle("-fx-background-color: #38BDF8; -fx-text-fill: #0F172A; -fx-font-weight: bold; -fx-background-radius: 4px; -fx-padding: 6 12; -fx-cursor: hand;");
+            btnUpdate.setGraphic(LucideIcon.create(LucideIcon.DOWNLOAD, 14, "#0F172A"));
+
+            btnUpdate.setOnAction(e -> {
+                btnUpdate.setDisable(true);
+                progressBar.setVisible(true);
+                progressBar.setManaged(true);
+                lblProgressDetail.setVisible(true);
+                lblProgressDetail.setManaged(true);
+
+                UpdateService.performUpdate(
+                        release,
+                        progress -> Platform.runLater(() -> {
+                            if (progress >= 0) {
+                                progressBar.setProgress(progress);
+                            }
+                        }),
+                        status -> Platform.runLater(() -> {
+                            lblProgressDetail.setText(status);
+                        })
+                ).exceptionally(ex -> {
+                    Platform.runLater(() -> {
+                        btnUpdate.setDisable(false);
+                        lblProgressDetail.setText("Update fehlgeschlagen: " + ex.getMessage());
+                        lblProgressDetail.setStyle("-fx-text-fill: #EF4444;");
+                    });
+                    return null;
+                });
+            });
+
+            actionButtonBox.getChildren().setAll(btnUpdate);
+        } else {
+            lblStatus.setText("artnet2view ist auf dem neuesten Stand.");
+            lblStatus.setStyle("-fx-text-fill: #10B981; -fx-font-size: 12px; -fx-font-weight: bold;");
+
+            this.btnRetry = new Button("Erneut prüfen");
+            btnRetry.getStyleClass().add("patch-cancel-btn");
+            btnRetry.setGraphic(LucideIcon.create(LucideIcon.REFRESH_CW, 13, "#9CA3AF"));
+            btnRetry.setOnAction(e -> checkForUpdates());
+
+            actionButtonBox.getChildren().setAll(btnRetry);
+        }
+    }
+
+    private void applyErrorResult(String errorMessage) {
+        this.isChecking = false;
+        this.isError = true;
+        spinner.setVisible(false);
+        spinner.setManaged(false);
+        lblLatestVersion.setText("Fehler");
+        lblLatestVersion.setStyle("-fx-text-fill: #EF4444; -fx-font-size: 14px; -fx-font-weight: bold;");
+        lblStatus.setText("Update-Prüfung fehlgeschlagen: " + errorMessage);
+        lblStatus.setStyle("-fx-text-fill: #EF4444; -fx-font-size: 12px;");
+
+        this.btnRetry = new Button("Erneut prüfen");
+        btnRetry.getStyleClass().add("patch-cancel-btn");
+        btnRetry.setGraphic(LucideIcon.create(LucideIcon.REFRESH_CW, 13, "#9CA3AF"));
+        btnRetry.setOnAction(e -> checkForUpdates());
+
+        actionButtonBox.getChildren().setAll(btnRetry);
+    }
+
+    private void close() {
+        if (closeCallback != null) {
+            closeCallback.run();
+        }
+    }
+
+    public Node getView() {
+        return this;
+    }
+
+    public Label getLblCurrentVersion() {
+        return lblCurrentVersion;
+    }
+
+    public Label getLblCurTitle() {
+        return lblCurTitle;
+    }
+
+    public Label getLblLatestVersion() {
+        return lblLatestVersion;
+    }
+
+    public Label getLblLatTitle() {
+        return lblLatTitle;
+    }
+
+    public Label getLblStatus() {
+        return lblStatus;
+    }
+
+    public Button getBtnClose() {
+        return btnClose;
+    }
+
+    public MarkdownView getMarkdownChangelog() {
+        return markdownChangelog;
     }
 }

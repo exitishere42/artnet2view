@@ -17,8 +17,10 @@ import javafx.animation.AnimationTimer;
 import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -219,17 +221,20 @@ public class Artnet2viewApplication extends Application {
 
         // Brand & Title Button with Dropdown Menu (matching JDMX)
         Button brandBtn = new Button("artnet2view");
-        brandBtn.setGraphic(LucideIcon.create(LucideIcon.BOX, 18, "#38BDF8"));
+        brandBtn.setGraphic(LucideIcon.create(LucideIcon.BOX, 18, "#FFFFFF"));
         brandBtn.getStyleClass().add("brand-button");
+        brandBtn.setCursor(Cursor.HAND);
+        brandBtn.setContentDisplay(ContentDisplay.LEFT);
+        brandBtn.setGraphicTextGap(8);
 
         BrandActionMenu brandMenu = new BrandActionMenu();
         brandBtn.setOnAction(e -> {
             if (brandMenu.isShowing()) {
                 brandMenu.hide();
             } else {
-                javafx.geometry.Point2D p = brandBtn.localToScreen(0, brandBtn.getHeight() + 4);
-                if (p != null) {
-                    brandMenu.show(brandBtn, p.getX(), p.getY());
+                Bounds bounds = brandBtn.localToScreen(brandBtn.getBoundsInLocal());
+                if (bounds != null && brandBtn.getScene() != null && brandBtn.getScene().getWindow() != null) {
+                    brandMenu.show(brandBtn.getScene().getWindow(), bounds.getMinX(), bounds.getMaxY() + 4);
                 }
             }
         });

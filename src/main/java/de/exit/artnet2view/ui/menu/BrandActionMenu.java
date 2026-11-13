@@ -1,6 +1,7 @@
 package de.exit.artnet2view.ui.menu;
 
 import de.exit.artnet2view.ui.theme.LucideIcon;
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.control.Button;
@@ -71,7 +72,7 @@ public class BrandActionMenu extends Popup {
         btn.setGraphic(LucideIcon.create(iconName, 16, toHex(iconColor)));
 
         btn.setOnAction(e -> {
-            hide();
+            safeHide();
             Runnable action = actions.get(key);
             if (action != null) {
                 action.run();
@@ -80,6 +81,19 @@ public class BrandActionMenu extends Popup {
 
         items.put(key, btn);
         return btn;
+    }
+
+    /**
+     * Closes the dropdown menu safely and thread-safe if showing.
+     */
+    public void safeHide() {
+        if (isShowing()) {
+            if (Platform.isFxApplicationThread()) {
+                hide();
+            } else {
+                Platform.runLater(this::hide);
+            }
+        }
     }
 
     private Separator createMenuSeparator() {
@@ -101,6 +115,10 @@ public class BrandActionMenu extends Popup {
         } else {
             actions.remove(key);
         }
+    }
+
+    public Button getItem(String key) {
+        return items.get(key);
     }
 
     public Map<String, Button> getItems() {

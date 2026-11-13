@@ -4,7 +4,7 @@ chcp 65001 >nul 2>&1
 
 set "REPO=exitishere42/artnet2view"
 set "INSTALL_DIR=%USERPROFILE%\artnet2view"
-set "JAR_NAME=artnet2view-1.2.1-all.jar"
+set "JAR_NAME=artnet2view-1.2.2-all.jar"
 set "RELEASE_URL=https://github.com/%REPO%/releases/latest/download"
 set "RAW_URL=https://raw.githubusercontent.com/%REPO%/main"
 
